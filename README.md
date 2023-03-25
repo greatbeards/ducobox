@@ -1,4 +1,4 @@
-XL-MaxSonar
+Ducobox Focus
 ==============
 Homeassistant Custom component for the DocuBox focus via serial modbus connection.
 Autmatic detection of connected valves / sensors / switches.
