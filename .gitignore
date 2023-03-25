@@ -1,8 +1,8 @@
-
-# Hide sublime text stuff
-*.sublime-project
-*.sublime-workspace
-
+__pycache__/*
+.storage/*
+blueprints/*
+home-assistant*
+*.yaml
 
 # Thumbnails
 ._*
