@@ -1,0 +1,12 @@
+{
+    "domain": "ducobox",
+    "name": "DucoBox Focus",
+    "integration_type": "hub",
+    "documentation": "https://www.example.com",
+    "dependencies": [],
+    "codeowners": [],
+    "requirements": ["minimalmodbus>=2.0.0"],
+    "iot_class": "local_polling",
+    "version": "v0.0.1",
+    "config_flow": true
+  }

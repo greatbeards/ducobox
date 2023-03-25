@@ -1,0 +1,20 @@
+{
+  "config": {
+    "error": {
+      "serial_port": "Failed to open the serial port.",
+      "no_module": "Failed to detect DocuBox Foxus master module. Check the wiring."
+    },
+    "step": {
+      "user": {
+        "data": {
+          "serial_port": "Serial port",
+                "baudrate": "Baudrate",
+                "slave_adr": "Modbus slave id",
+                "simulate": "Simulation mode"
+        },
+        "description": "DucoBox Focus connection settings",
+        "title": "DucoBox Focus"
+      }
+    }
+  }
+}
