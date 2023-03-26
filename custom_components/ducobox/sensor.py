@@ -61,7 +61,6 @@ class DocuSensor(SensorEntity):
     def __init__(self, sens: GenericSensor, device_id) -> None:
         """Initialize the sensor."""
         self.sens_obj = sens
-        self._state = sens.update()
         self.device_id = device_id
 
         if "temperature" in sens.name:
