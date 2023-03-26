@@ -156,8 +156,6 @@ class DucoBoxBase:
             SIMULATION_MODE = True
 
             _LOGGER.info("Running in simulation mode")
-            self._simulate_modules()
-            return
 
     async def create_serial_connection(self):
         if self.simulate:
@@ -616,4 +614,6 @@ ducobox_modules = {
 ###########################################################
 if __name__ == "__main__":
     dbb = DucoBoxBase("/dev/ttyUSB0", simulate=True)
+    asyncio.run(dbb.create_serial_connection())
+    asyncio.run(dbb.scan_modules())
     asyncio.run(dbb.update_sensors())
