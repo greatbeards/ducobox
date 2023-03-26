@@ -163,7 +163,7 @@ class DucoBoxBase:
             return
 
         try:
-            mb_client = await AsyncioInstrument(
+            mb_client = AsyncioInstrument(
                 self.serial_port, self.slave_adr, mode=MODE_RTU
             )  # port name, slave address (in decimal)
             mb_client.serial.timeout = 0.1  # sec
