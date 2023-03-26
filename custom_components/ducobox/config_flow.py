@@ -19,7 +19,7 @@ USER_CONFIG = vol.Schema(
 )
 
 
-def check_config(user_input):
+async def check_config(user_input):
     logging.info(user_input)
 
     ret = False
@@ -27,7 +27,10 @@ def check_config(user_input):
         dbb = DucoBoxBase(**user_input)
         if len(dbb.modules) > 0:
             ret = True
+        await dbb.create_serial_connection()
+        await dbb.scan_modules()
     except:
+        _LOGGER.exception("Could not reach any module")
         # TODO: report errors
         pass
     return ret
@@ -44,7 +47,7 @@ class DucoboxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: Dict[str, str] = {}
         if user_input is not None:
             # Validate user input
-            valid = check_config(user_input)
+            valid = await check_config(user_input)
             if valid:
                 # See next section on create entry usage
                 return self.async_create_entry(

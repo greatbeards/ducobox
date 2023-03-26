@@ -39,6 +39,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         slave_adr=entry.data["slave_adr"],
         simulate=entry.data["simulate"],
     )
+    await dbb.create_serial_connection()
+    await dbb.scan_modules()
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = dbb
 

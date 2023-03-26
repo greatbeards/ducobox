@@ -95,11 +95,11 @@ class DocuSensor(SensorEntity):
         """Return the unit of measurement."""
         return self.unit
 
-    def update(self) -> None:
+    async def async_update(self) -> None:
         """Fetch new state data for the sensor.
         This is the only method that should fetch new data for Home Assistant.
         """
-        self.sens_obj.update()
+        await self.sens_obj.update()
 
     @property
     def device_info(self) -> DeviceInfo:
