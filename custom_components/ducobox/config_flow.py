@@ -20,15 +20,14 @@ USER_CONFIG = vol.Schema(
 
 
 async def check_config(user_input):
-    logging.info(user_input)
 
     ret = False
     try:
         dbb = DucoBoxBase(**user_input)
-        if len(dbb.modules) > 0:
-            ret = True
         await dbb.create_serial_connection()
         await dbb.scan_modules()
+        if len(dbb.modules) > 0:
+            ret = True
     except:
         _LOGGER.exception("Could not reach any module")
         # TODO: report errors
@@ -54,8 +53,9 @@ class DucoboxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     title="Ducobox Focus",
                     data=user_input,
                 )
-            else:
-                errors["base"] = "incorrect settings"
+
+            _LOGGER.info(f"config failed {valid}")
+            errors["base"] = "incorrect settings"
 
         return self.async_show_form(
             step_id="user", data_schema=USER_CONFIG, errors=errors
