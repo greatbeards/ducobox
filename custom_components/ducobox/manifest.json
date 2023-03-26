@@ -7,6 +7,6 @@
     "codeowners": ["@greatbeards"] ,
     "requirements": ["minimalmodbus>=2.0.0", "AsyncioMinimalModbus>=1.0.0"],
     "iot_class": "local_polling",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "config_flow": true
   }
