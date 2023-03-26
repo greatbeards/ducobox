@@ -1,4 +1,6 @@
-from minimalmodbus import Instrument, MODE_RTU, ModbusException
+import asyncio
+from asynciominimalmodbus import AsyncioInstrument
+from minimalmodbus import MODE_RTU, ModbusException
 import logging
 import random
 
@@ -33,8 +35,11 @@ status_descr = {
     99: "Error",
 }
 
-simulation_mode = False
-unique_id_cnt = 0
+SIMULATION_MODE = False
+
+
+class DucoBoxException(Exception):
+    pass
 
 
 class GenericSensor:
@@ -51,29 +56,32 @@ class GenericSensor:
         self.input_reg = input_reg
 
         self.alias = (
-            str(self.module)
-            + "_"
+            str(self.module.name)
+            + " @adr "
+            + str(self.module.base_adr)
+            + " "
             + self.name
-            + "_"
+            + " "
             + str(input_reg)
-            + "_"
+            + " "
             + str(holding_reg)
         )
 
-    def update(self):
-        if simulation_mode:
+    async def update(self):
+        if SIMULATION_MODE:
             self.value = random.randint(0, 100)
+            await asyncio.sleep(0.01)
             return
 
         if self.holding_reg:
-            self.value = self.read_holding_reg(self.holding_reg)
+            self.value = await self.read_holding_reg(self.holding_reg)
         else:
-            self.value = self.read_input_reg(self.input_reg)
+            self.value = await self.read_input_reg(self.input_reg)
 
-    def read_input_reg(self, adress):
+    async def read_input_reg(self, adress):
         while self.retry > 1:
             try:
-                ret = self.mb_client.read_register(
+                ret = await self.mb_client.read_register(
                     adress - 1, functioncode=4, signed=True
                 )
                 self.retry = self.retry_attempts
@@ -83,10 +91,10 @@ class GenericSensor:
 
         _LOGGER.warning("Disabled %s - unresponsive" % self.alias)
 
-    def read_holding_reg(self, adress):
+    async def read_holding_reg(self, adress):
         while self.retry > 1:
             try:
-                ret = self.mb_client.read_register(
+                ret = await self.mb_client.read_register(
                     adress - 1, functioncode=3, signed=True
                 )
                 self.retry = self.retry_attempts
@@ -107,7 +115,7 @@ class GenericActuator(GenericSensor):
         super().__init__(modbus_client, module, name, holding_reg=holding_reg)
 
     def write(self, value):
-        if not simulation_mode:
+        if not SIMULATION_MODE:
             self._write_holding_reg(self.holding_reg, value)
         else:
             self.value = value
@@ -138,23 +146,33 @@ class DucoBoxBase:
         self.sensors = []
         self.actuators = []
         self.modules = []
+        self.serial_port = serial_port
+        self.baudrate = baudrate
+        self.slave_adr = slave_adr
+        self.mb_client = None
 
         if simulate:
-            global simulation_mode
-            simulation_mode = True
-            self.mb_client = None
+            global SIMULATION_MODE
+            SIMULATION_MODE = True
+
             _LOGGER.info("Running in simulation mode")
             self._simulate_modules()
             return
 
-        mb_client = Instrument(
-            serial_port, slave_adr, mode=MODE_RTU
-        )  # port name, slave address (in decimal)
-        mb_client.serial.timeout = 0.1  # sec
-        mb_client.serial.baudrate = baudrate
-        self.mb_client = mb_client
+    async def create_serial_connection(self):
+        if self.simulate:
+            await asyncio.sleep(0.01)
+            return
 
-        self._scan_modules()
+        try:
+            mb_client = await AsyncioInstrument(
+                self.serial_port, self.slave_adr, mode=MODE_RTU
+            )  # port name, slave address (in decimal)
+            mb_client.serial.timeout = 0.1  # sec
+            mb_client.serial.baudrate = self.baudrate
+            self.mb_client = mb_client
+        except Exception:
+            _LOGGER.exception(f"Failed to open serial port {self.serial_port}")
 
     def add_sensor(self, sensor: GenericSensor):
         self.sensors.append(sensor)
@@ -162,7 +180,7 @@ class DucoBoxBase:
     def detected(self):
         return len(self.modules) > 0
 
-    def _simulate_modules(self):
+    async def _simulate_modules(self):
         """In simulation mode, load a module of each type"""
 
         adr = 10
@@ -170,14 +188,19 @@ class DucoBoxBase:
             mod = duco_mod[0](mb_client=self.mb_client, base_adr=adr)
             self.modules.append(mod)
             adr += 10
+            await asyncio.sleep(0.01)
 
-    def _scan_modules(self):
+    async def scan_modules(self):
         """Scan all connected modules"""
+        if self.simulate:
+            await self._simulate_modules()
+            return
+
         for adr in range(10, 90, 10):
             resp = None
             while self.retry > 1:
                 try:
-                    resp = self.mb_client.read_register(
+                    resp = await self.mb_client.read_register(
                         adr - 1, functioncode=4, signed=True
                     )
                     break
@@ -198,25 +221,30 @@ class DucoBoxBase:
                 # self.actuators += mod.actuators
                 self.modules.append(mod)
 
-    def update_sensors(self):
+        if len(self.modules) == 0:
+            raise DucoBoxException("No modules detected!")
+
+    async def update_sensors(self):
         """Fetch all data from all sensors"""
-        remove_ids = []
-        for id, sensor in enumerate(self.sensors):
-            sensor.update()
 
-            if sensor.value is None:
-                remove_ids.append(id)
-            else:
-                print(sensor)
+        for id, module in enumerate(self.modules):
+            remove_ids = []
+            for id, sensor in enumerate(module.sensors):
+                await sensor.update()
 
-        for id in remove_ids[::-1]:
-            del self.sensors[id]
+                if sensor.value is None:
+                    remove_ids.append(id)
+                else:
+                    print(sensor)
+
+            for id in remove_ids[::-1]:
+                del self.sensors[id]
 
 
 class DucoBox:
     name = "Master module"
 
-    def __init__(self, mb_client: Instrument | None, base_adr: int) -> None:
+    def __init__(self, mb_client: AsyncioInstrument | None, base_adr: int) -> None:
         self.mb_client = mb_client
         self.base_adr = base_adr
 
@@ -283,7 +311,7 @@ class DucoBox:
 class DucoValve(DucoBox):
     name = "Generic valve"
 
-    def __init__(self, mb_client: Instrument, base_adr: int) -> None:
+    def __init__(self, mb_client: AsyncioInstrument, base_adr: int) -> None:
         super().__init__(mb_client, base_adr)
         self.mb_client = mb_client
 
@@ -345,7 +373,7 @@ class DucoValve(DucoBox):
 class DucoCO2Valve(DucoValve):
     name = "CO2 valve"
 
-    def __init__(self, mb_client: Instrument, base_adr: int) -> None:
+    def __init__(self, mb_client: AsyncioInstrument, base_adr: int) -> None:
         super().__init__(mb_client, base_adr)
 
         self.sensors += [
@@ -370,7 +398,7 @@ class DucoCO2Valve(DucoValve):
 class DucoHumValve(DucoValve):
     name = "Humidity valve"
 
-    def __init__(self, mb_client: Instrument, base_adr: int) -> None:
+    def __init__(self, mb_client: AsyncioInstrument, base_adr: int) -> None:
         super().__init__(mb_client, base_adr)
 
         self.sensors += [
@@ -401,7 +429,7 @@ class DucoHumValve(DucoValve):
 class DucoCO2HumValve(DucoValve):
     name = "Humidity and CO2 valve"
 
-    def __init__(self, mb_client: Instrument, base_adr: int) -> None:
+    def __init__(self, mb_client: AsyncioInstrument, base_adr: int) -> None:
         super().__init__(mb_client, base_adr)
 
         self.sensors += [
@@ -444,7 +472,7 @@ class DucoCO2HumValve(DucoValve):
 class DucoSensorlessValve(DucoValve):
     name = "Sensorless valve"
 
-    def __init__(self, mb_client: Instrument, base_adr: int) -> None:
+    def __init__(self, mb_client: AsyncioInstrument, base_adr: int) -> None:
         super().__init__(mb_client, base_adr)
 
         self.sensors += [
@@ -460,7 +488,7 @@ class DucoSensorlessValve(DucoValve):
 class DucoSensor:
     name = "Generic sensor"
 
-    def __init__(self, mb_client: Instrument, base_adr: int) -> None:
+    def __init__(self, mb_client: AsyncioInstrument, base_adr: int) -> None:
         self.base_adr = base_adr
 
         self.sensors = [
@@ -485,7 +513,7 @@ class DucoSensor:
 class DucoCO2Sensor(DucoSensor):
     name = "CO2 sensor"
 
-    def __init__(self, mb_client: Instrument, base_adr: int) -> None:
+    def __init__(self, mb_client: AsyncioInstrument, base_adr: int) -> None:
         super().__init__(mb_client, base_adr)
 
         self.sensors += [
@@ -516,7 +544,7 @@ class DucoCO2Sensor(DucoSensor):
 class DucoHumSensor(DucoSensor):
     name = "Humidity sensor"
 
-    def __init__(self, mb_client: Instrument, base_adr: int) -> None:
+    def __init__(self, mb_client: AsyncioInstrument, base_adr: int) -> None:
         super().__init__(mb_client, base_adr)
 
         self.sensors += [
@@ -553,7 +581,7 @@ class DucoHumSensor(DucoSensor):
 class DucoVentValve(DucoValve):
     name = "Tronic vent valve"
 
-    def __init__(self, mb_client: Instrument, base_adr: int) -> None:
+    def __init__(self, mb_client: AsyncioInstrument, base_adr: int) -> None:
         super().__init__(mb_client, base_adr)
 
         self.sensors += [
@@ -588,3 +616,4 @@ ducobox_modules = {
 ###########################################################
 if __name__ == "__main__":
     dbb = DucoBoxBase("/dev/ttyUSB0", simulate=True)
+    asyncio.run(dbb.update_sensors())
