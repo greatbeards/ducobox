@@ -7,6 +7,10 @@ Autmatic detection of connected valves / sensors / switches.
 All modules described in the ducobox focus manual are supported.
 `https://www.duco.eu/Wes/CDN/1/Attachments/informatieblad-ModBus-RTU-(nl)_638085224731148696.pdf`
 
+
+Under development!
+
+
 Connection
 ----------
 
@@ -43,7 +47,10 @@ Simulation mode will create a virtual device for every supported type of valve/s
 Status
 ======
 
+
+
 2023-03:
+* Under development!
 * Automatic detection of modules
 * Implemented config flow
 * No error handling during setup
