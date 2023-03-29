@@ -203,7 +203,7 @@ class DucoBoxBase:
                         adr - 1, functioncode=4, signed=True
                     )
                     break
-                except ModbusException as exp:
+                except ModbusException:
                     self.retry -= 1
             if resp in ducobox_modules:
                 _LOGGER.info(
@@ -220,19 +220,12 @@ class DucoBoxBase:
 
         for id, module in enumerate(self.modules):
             # remove_ids = []
-            for id, sensor in enumerate(module.sensors):
+            for sensor in module.sensors:
                 await sensor.update()
 
-            for id, actuator in enumerate(module.actuators):
+            for actuator in module.actuators:
                 await actuator.update()
 
-                # if sensor.value is None:
-                #    remove_ids.append(id)
-                # else:
-                #    print(sensor)
-
-            # for id in remove_ids[::-1]:
-            #    del module.sensors[id]
 
 
 class DucoBox:
