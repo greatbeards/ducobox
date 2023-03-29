@@ -194,6 +194,7 @@ class DucoBoxBase:
             await self._simulate_modules()
             return
 
+        self.modules = []
         for adr in range(10, 90, 10):
             resp = None
             while self.retry > 1:
@@ -202,21 +203,13 @@ class DucoBoxBase:
                         adr - 1, functioncode=4, signed=True
                     )
                     break
-                except ModbusException:
+                except ModbusException as exp:
                     self.retry -= 1
-
-            if resp is None:
-                _LOGGER.warning("No response from %d - stop scanning for modules" % adr)
-                break
-
-            self.modules = []
             if resp in ducobox_modules:
                 _LOGGER.info(
                     "Detected %s on adress %d" % (ducobox_modules[resp][1], adr)
                 )
                 mod = ducobox_modules[resp][0](self.mb_client, adr)
-                # self.sensors += mod.sensors
-                # self.actuators += mod.actuators
                 self.modules.append(mod)
 
         if len(self.modules) == 0:
@@ -226,17 +219,20 @@ class DucoBoxBase:
         """Fetch all data from all sensors"""
 
         for id, module in enumerate(self.modules):
-            remove_ids = []
+            # remove_ids = []
             for id, sensor in enumerate(module.sensors):
                 await sensor.update()
 
-                if sensor.value is None:
-                    remove_ids.append(id)
-                else:
-                    print(sensor)
+            for id, actuator in enumerate(module.actuators):
+                await actuator.update()
 
-            for id in remove_ids[::-1]:
-                del self.sensors[id]
+                # if sensor.value is None:
+                #    remove_ids.append(id)
+                # else:
+                #    print(sensor)
+
+            # for id in remove_ids[::-1]:
+            #    del module.sensors[id]
 
 
 class DucoBox:
@@ -613,7 +609,10 @@ ducobox_modules = {
 ###########################################################
 ###########################################################
 if __name__ == "__main__":
-    dbb = DucoBoxBase("/dev/ttyUSB0", simulate=True)
-    asyncio.run(dbb.create_serial_connection())
-    asyncio.run(dbb.scan_modules())
-    asyncio.run(dbb.update_sensors())
+    loop = asyncio.get_event_loop()
+
+    dbb = DucoBoxBase("/dev/ttyUSB0", simulate=False)
+    loop.run_until_complete(dbb.create_serial_connection())
+    loop.run_until_complete(dbb.scan_modules())
+    loop.run_until_complete(dbb.update_sensors())
+    loop.run_forever()
