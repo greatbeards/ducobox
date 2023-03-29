@@ -95,7 +95,6 @@ class MyCoordinator(DataUpdateCoordinator):
 class DocuSensor(CoordinatorEntity, SensorEntity):
     """Representation of a sensor."""
 
-    _attr_should_poll = True
     _attr_unique_id = True
 
     def __init__(
