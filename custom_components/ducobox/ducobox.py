@@ -6,16 +6,6 @@ import random
 
 _LOGGER = logging.getLogger(__name__)
 
-# import time
-# import os
-# import requests
-# import sys
-# import numpy as np
-# import datetime
-# import configparser
-# import _LOGGER
-# import _LOGGER.handlers
-
 ## file:///C:/Users/gebruiker/Downloads/informatieblad-ModBus-RTU-(nl).pdf
 # https://www.duco.eu/Wes/CDN/1/Attachments/informatieblad-ModBus-RTU-(nl)_638085224731148696.pdf
 
@@ -184,9 +174,20 @@ class DucoBoxBase:
         adr = 10
         for code, duco_mod in ducobox_modules.items():
             mod = duco_mod[0](mb_client=self.mb_client, base_adr=adr)
+
+            print(adr, str(duco_mod[0]), mod, mod.name)
+            print("\r\n".join([str(sens) for sens in mod.sensors]))
+
             self.modules.append(mod)
+            self.sensors += mod.sensors
             adr += 10
-            await asyncio.sleep(0.01)
+
+        # sort sensors based on alias
+        # self.sensor_alias =
+        # self.sensor_alias.sort()
+
+        # print("\r\n".join(self.sensor_alias))
+        await asyncio.sleep(0.01)
 
     async def scan_modules(self):
         """Scan all connected modules"""
@@ -223,37 +224,56 @@ class DucoBoxBase:
             for sensor in module.sensors:
                 await sensor.update()
 
-            for actuator in module.actuators:
-                await actuator.update()
+            # for actuator in module.actuators:
+            #    await actuator.update()
 
 
-class DucoBox:
+class DucoDevice:
+    """Base class for all devices holds the sensors list."""
+
+    def __init__(self, required_argument="sdf") -> None:
+        print("__init__ DucoDevice: " + str(required_argument))
+        self.sensors = []
+
+    def register_sensors(self, sensor_list):
+        sens_names = [sens.name for sens in self.sensors]
+
+        for new_sens in sensor_list:
+            if not new_sens.name in sens_names:
+                self.sensors.append(new_sens)
+            else:
+                print("%s already present" % new_sens.name)
+
+
+class DucoBox(DucoDevice):
     name = "Master module"
 
-    def __init__(self, mb_client: AsyncioInstrument | None, base_adr: int) -> None:
+    def __init__(
+        self, mb_client: AsyncioInstrument | None, base_adr: int, register_sensors=None
+    ) -> None:
         self.mb_client = mb_client
         self.base_adr = base_adr
 
-        self.sensors = [
+        sensors = [
             GenericSensor(
                 mb_client,
                 module=self,
                 name="ventilation setpoint",
                 holding_reg=base_adr + 0,
             ),
-            GenericSensor(
+            GenericActuator(
                 mb_client,
                 module=self,
                 name="auto min",
                 holding_reg=base_adr + 5,
             ),
-            GenericSensor(
+            GenericActuator(
                 mb_client,
                 module=self,
                 name="auto max",
                 holding_reg=base_adr + 6,
             ),
-            GenericSensor(
+            GenericActuator(
                 mb_client,
                 module=self,
                 name="action",
@@ -289,103 +309,6 @@ class DucoBox:
                 name="maximal power",
                 input_reg=base_adr + 5,
             ),
-        ]
-
-        self.actuators = []
-
-
-class DucoValve(DucoBox):
-    name = "Generic valve"
-
-    def __init__(self, mb_client: AsyncioInstrument, base_adr: int) -> None:
-        super().__init__(mb_client, base_adr)
-        self.mb_client = mb_client
-
-        self.sensors = [
-            GenericSensor(
-                mb_client,
-                module=self,
-                name="auto min",
-                holding_reg=base_adr + 5,
-            ),
-            GenericSensor(
-                mb_client,
-                module=self,
-                name="auto max",
-                holding_reg=base_adr + 6,
-            ),
-            GenericSensor(
-                mb_client,
-                module=self,
-                name="localisation ID",
-                holding_reg=base_adr + 9,
-            ),
-            GenericSensor(
-                mb_client,
-                module=self,
-                name="status",
-                input_reg=base_adr + 1,
-            ),
-            GenericSensor(
-                mb_client,
-                module=self,
-                name="ventilation level",
-                input_reg=base_adr + 2,
-            ),
-            # GenericSensor(
-            #    mb_client,
-            #    module=self,
-            #    name="temperature",
-            #    input_reg=base_adr + 3,
-            # ),
-        ]
-
-        self.actuators = [
-            GenericActuator(
-                mb_client,
-                module=self,
-                name="ventilation setpoint",
-                holding_reg=base_adr + 0,
-            ),
-            GenericActuator(
-                mb_client,
-                module=self,
-                name="maximal flow",
-                holding_reg=base_adr + 4,
-            ),
-        ]
-
-
-class DucoSensorlessValve(DucoValve):
-    name = "Sensorless valve"
-
-    def __init__(self, mb_client: AsyncioInstrument, base_adr: int) -> None:
-        super().__init__(mb_client, base_adr)
-
-        self.sensors += [
-            GenericSensor(
-                mb_client,
-                module=self,
-                name="temperature",
-                input_reg=base_adr + 3,
-            )
-        ]
-
-
-class DucoSensor:
-    name = "Generic sensor"
-
-    def __init__(self, mb_client: AsyncioInstrument, base_adr: int) -> None:
-        self.base_adr = base_adr
-
-        self.sensors = [
-            GenericSensor(
-                mb_client,
-                module=self,
-                name="status",
-                input_reg=base_adr + 1,
-            ),
-            # not supported on my ducoboxFocus
             GenericSensor(
                 mb_client,
                 module=self,
@@ -396,14 +319,25 @@ class DucoSensor:
 
         self.actuators = []
 
+        self.register_sensors(sensors)
 
-class DucoCO2Sensor(DucoSensor):
-    name = "CO2 sensor"
 
-    def __init__(self, mb_client: AsyncioInstrument, base_adr: int) -> None:
-        super().__init__(mb_client, base_adr)
+class DucoGenericSensor:
+    name = "Generic sensor"
 
-        self.sensors += [
+    def __init__(
+        self, mb_client: AsyncioInstrument, base_adr: int, register_sensors=None
+    ) -> None:
+        self.base_adr = base_adr
+
+        sensors = [
+            GenericSensor(
+                mb_client,
+                module=self,
+                name="status",
+                input_reg=base_adr + 1,
+            ),
+            # Not for batter powered sensor
             GenericSensor(
                 mb_client,
                 module=self,
@@ -413,12 +347,63 @@ class DucoCO2Sensor(DucoSensor):
             GenericSensor(
                 mb_client,
                 module=self,
-                name="CO2 value",
-                input_reg=base_adr + 4,
+                name="localisation ID",
+                input_reg=base_adr + 9,
+            ),
+            GenericActuator(
+                mb_client,
+                module=self,
+                name="button 1",
+                holding_reg=base_adr + 4,
+            ),
+            GenericActuator(
+                mb_client,
+                module=self,
+                name="button 2",
+                holding_reg=base_adr + 5,
+            ),
+            GenericActuator(
+                mb_client,
+                module=self,
+                name="button 3",
+                holding_reg=base_adr + 6,
+            ),
+            GenericActuator(
+                mb_client,
+                module=self,
+                name="Manual Time",
+                holding_reg=base_adr + 7,
+            ),
+            GenericActuator(
+                mb_client,
+                module=self,
+                name="action",
+                holding_reg=base_adr + 9,
             ),
         ]
 
-        self.actuators += [
+        if register_sensors:
+            register_sensors(sensors)
+
+
+class DucoCO2Sensor(DucoGenericSensor, DucoDevice):
+    name = "CO2 sensor"
+
+    def __init__(
+        self, mb_client: AsyncioInstrument, base_adr: int, register_sensors=None
+    ) -> None:
+        if register_sensors is None:
+            self.base_adr = base_adr
+            DucoDevice.__init__(self)
+            DucoGenericSensor.__init__(self, mb_client, base_adr, self.register_sensors)
+
+        sensors = [
+            GenericSensor(
+                mb_client,
+                module=self,
+                name="CO2 value",
+                input_reg=base_adr + 4,
+            ),
             GenericActuator(
                 mb_client,
                 module=self,
@@ -427,29 +412,27 @@ class DucoCO2Sensor(DucoSensor):
             ),
         ]
 
+        self.register_sensors(sensors)
 
-class DucoHumSensor(DucoSensor):
+
+class DucoHumSensor(DucoGenericSensor, DucoDevice):
     name = "Humidity sensor"
 
-    def __init__(self, mb_client: AsyncioInstrument, base_adr: int) -> None:
-        super().__init__(mb_client, base_adr)
+    def __init__(
+        self, mb_client: AsyncioInstrument, base_adr: int, register_sensors=None
+    ) -> None:
+        if register_sensors is None:
+            self.base_adr = base_adr
+            DucoDevice.__init__(self)
+            DucoGenericSensor.__init__(self, mb_client, base_adr, self.register_sensors)
 
-        self.sensors += [
-            GenericSensor(
-                mb_client,
-                module=self,
-                name="temperature",
-                input_reg=base_adr + 3,
-            ),
+        sensors = [
             GenericSensor(
                 mb_client,
                 module=self,
                 name="humidity",
                 input_reg=base_adr + 5,
             ),
-        ]
-
-        self.actuators += [
             GenericActuator(
                 mb_client,
                 module=self,
@@ -464,150 +447,224 @@ class DucoHumSensor(DucoSensor):
             ),
         ]
 
+        self.register_sensors(sensors)
 
-class DucoCO2Valve(DucoValve):
-    name = "CO2 valve"
 
-    def __init__(self, mb_client: AsyncioInstrument, base_adr: int) -> None:
-        super().__init__(mb_client, base_adr)
+class DucoValve:
+    """Holding the generic parameters for a valve"""
 
-        self.sensors += [
-            GenericSensor(
-                mb_client,
-                module=self,
-                name="temperature",
-                input_reg=base_adr + 3,
-            ),
-            GenericSensor(
-                mb_client,
-                module=self,
-                name="CO2 value",
-                input_reg=base_adr + 4,
-            ),
-        ]
+    name = "Generic valve"
 
-        self.actuators += [
+    def __init__(
+        self, mb_client: AsyncioInstrument, base_adr: int, register_sensors=None
+    ) -> None:
+        print("DucoValve")
+        self.base_adr = base_adr
+        self.mb_client = mb_client
+
+        sensors = [
             GenericActuator(
                 mb_client,
                 module=self,
-                name="CO2 setpoint",
-                holding_reg=base_adr + 1,
+                name="auto min",
+                holding_reg=base_adr + 5,
             ),
-        ]
-
-
-class DucoHumValve(DucoValve, DucoHumSensor):
-    name = "Humidity valve"
-
-    def __init__(self, mb_client: AsyncioInstrument, base_adr: int) -> None:
-        super().__init__(mb_client, base_adr)
-
-        if False:
-            self.sensors += [
-                GenericSensor(
-                    mb_client,
-                    module=self,
-                    name="temperature",
-                    input_reg=base_adr + 3,
-                ),
-                GenericSensor(
-                    mb_client,
-                    module=self,
-                    name="humidity",
-                    input_reg=base_adr + 5,
-                ),
-            ]
-
-            self.actuators += [
-                GenericActuator(
-                    mb_client,
-                    module=self,
-                    name="humidity setpoint",
-                    holding_reg=base_adr + 2,
-                ),
-                GenericActuator(
-                    mb_client,
-                    module=self,
-                    name="humidity delta",
-                    holding_reg=base_adr + 3,
-                ),
-            ]
-
-
-class DucoCO2HumValve(DucoValve, DucoCO2Sensor, DucoHumSensor):
-    name = "Humidity and CO2 valve"
-
-    def __init__(self, mb_client: AsyncioInstrument, base_adr: int) -> None:
-        super().__init__(mb_client, base_adr)
-
-        if False:
-            self.sensors += [
-                GenericSensor(
-                    mb_client,
-                    module=self,
-                    name="temperature",
-                    input_reg=base_adr + 4,
-                ),
-                GenericSensor(
-                    mb_client,
-                    module=self,
-                    name="humidity",
-                    input_reg=base_adr + 5,
-                ),
-            ]
-
-            self.actuators += [
-                GenericActuator(
-                    mb_client,
-                    module=self,
-                    name="CO2 setpoint",
-                    holding_reg=base_adr + 1,
-                ),
-                GenericActuator(
-                    mb_client,
-                    module=self,
-                    name="humidity setpoint",
-                    holding_reg=base_adr + 2,
-                ),
-                GenericActuator(
-                    mb_client,
-                    module=self,
-                    name="humidity delta",
-                    holding_reg=base_adr + 3,
-                ),
-            ]
-
-
-class DucoVentValve(DucoSensorlessValve):
-    name = "Tronic vent valve"
-
-    def __init__(self, mb_client: AsyncioInstrument, base_adr: int) -> None:
-        super().__init__(mb_client, base_adr)
-
-        self.sensors += [
+            GenericActuator(
+                mb_client,
+                module=self,
+                name="auto max",
+                holding_reg=base_adr + 6,
+            ),
+            GenericSensor(
+                mb_client,
+                module=self,
+                name="localisation ID",
+                input_reg=base_adr + 9,
+            ),
+            GenericSensor(
+                mb_client,
+                module=self,
+                name="status",
+                input_reg=base_adr + 1,
+            ),
+            GenericSensor(
+                mb_client,
+                module=self,
+                name="ventilation level",
+                input_reg=base_adr + 2,
+            ),
             GenericSensor(
                 mb_client,
                 module=self,
                 name="temperature",
                 input_reg=base_adr + 3,
             ),
+            GenericActuator(
+                mb_client,
+                module=self,
+                name="ventilation setpoint",
+                holding_reg=base_adr + 0,
+            ),
+            GenericActuator(
+                mb_client,
+                module=self,
+                name="flow",
+                holding_reg=base_adr + 4,
+            ),
+            GenericActuator(
+                mb_client,
+                module=self,
+                name="action",
+                holding_reg=base_adr + 9,
+            ),
         ]
 
+        print(register_sensors)
 
-class DucoControlSwitch(DucoValve):
-    name = "Switching contact"
+        if register_sensors:
+            print("registering sensors from DucoValve")
+            register_sensors(sensors)
+
+
+class DucoSwitch(DucoGenericSensor, DucoDevice):
+    name = "control switch"
+
+    def __init__(self, mb_client: AsyncioInstrument, base_adr: int) -> None:
+        self.base_adr = base_adr
+        DucoDevice.__init__(self)
+        super().__init__(mb_client, base_adr, self.register_sensors)
+
+
+class DucoSensorlessValve(DucoValve, DucoDevice):
+    name = "Sensorless valve"
+
+    def __init__(self, mb_client: AsyncioInstrument, base_adr: int) -> None:
+        DucoDevice.__init__(self)
+        DucoValve.__init__(self, mb_client, base_adr, self.register_sensors)
+
+
+class DucoCO2Valve(DucoValve, DucoCO2Sensor, DucoDevice):
+    name = "CO2 valve"
+
+    def __init__(self, mb_client: AsyncioInstrument, base_adr: int) -> None:
+        self.base_adr = base_adr
+        DucoDevice.__init__(self)
+        DucoValve.__init__(self, mb_client, base_adr, self.register_sensors)
+        DucoCO2Sensor.__init__(self, mb_client, base_adr, self.register_sensors)
+
+
+class DucoHumValve(DucoValve, DucoHumSensor, DucoDevice):
+    name = "Humidity valve"
+
+    def __init__(self, mb_client: AsyncioInstrument, base_adr: int) -> None:
+        self.base_adr = base_adr
+        DucoDevice.__init__(self)
+        DucoValve.__init__(self, mb_client, base_adr, self.register_sensors)
+        DucoHumSensor.__init__(self, mb_client, base_adr, self.register_sensors)
+
+
+class DucoCO2HumValve(DucoValve, DucoCO2Sensor, DucoHumSensor, DucoDevice):
+    name = "Humidity and CO2 valve"
+
+    def __init__(self, mb_client: AsyncioInstrument, base_adr: int) -> None:
+        self.base_adr = base_adr
+        DucoDevice.__init__(self)
+        DucoValve.__init__(self, mb_client, base_adr, self.register_sensors)
+        DucoCO2Sensor.__init__(self, mb_client, base_adr, self.register_sensors)
+        DucoHumSensor.__init__(self, mb_client, base_adr, self.register_sensors)
+
+
+class DucoVentValve(DucoValve, DucoDevice):
+    name = "Tronic vent valve"
+
+    def __init__(self, mb_client: AsyncioInstrument, base_adr: int) -> None:
+        self.base_adr = base_adr
+        DucoDevice.__init__(self)
+        DucoValve.__init__(self, mb_client, base_adr, self.register_sensors)
+
+        sensors = [
+            GenericSensor(
+                mb_client,
+                module=self,
+                name="grille position",
+                input_reg=base_adr + 2,
+            ),
+            GenericSensor(
+                mb_client,
+                module=self,
+                name="temperature",
+                input_reg=base_adr + 3,
+            ),
+            GenericSensor(
+                mb_client,
+                module=self,
+                name="inlet",
+                holding_reg=base_adr + 4,
+            ),
+        ]
+
+        self.register_sensors(sensors)
+
+
+class DucoRelay(DucoDevice):
+    name = "relay contact"
+
+    def __init__(self, mb_client: AsyncioInstrument, base_adr: int) -> None:
+        self.base_adr = base_adr
+        DucoDevice.__init__(self)
+
+        sensors = [
+            GenericSensor(
+                mb_client,
+                module=self,
+                name="status",
+                input_reg=base_adr + 1,
+            ),
+            GenericSensor(
+                mb_client,
+                module=self,
+                name="ventilation level",
+                input_reg=base_adr + 2,
+            ),
+            GenericSensor(
+                mb_client,
+                module=self,
+                name="ventilation setpoint",
+                holding_reg=base_adr + 0,
+            ),
+            GenericSensor(
+                mb_client,
+                module=self,
+                name="switch mode",
+                holding_reg=base_adr + 1,
+            ),
+            GenericSensor(
+                mb_client,
+                module=self,
+                name="switch value",
+                holding_reg=base_adr + 2,
+            ),
+            GenericSensor(
+                mb_client,
+                module=self,
+                name="action",
+                holding_reg=base_adr + 9,
+            ),
+        ]
+
+        self.register_sensors(sensors)
 
 
 ducobox_modules = {
-    10: (DucoBox, "master"),
+    # 10: (DucoBox, "master"),
     11: (DucoSensorlessValve, "Sensorless valve"),
     12: (DucoCO2Valve, "CO2 valve"),
     13: (DucoHumValve, "humidity valve"),
-    14: (DucoSensor, "control switch"),
+    14: (DucoSwitch, "control switch"),
     15: (DucoCO2Sensor, "CO2 sensor"),
     16: (DucoHumSensor, "humidity sensor"),
     17: (DucoVentValve, "tronic vent valve"),
-    18: (DucoControlSwitch, "switching contact"),
+    18: (DucoRelay, "relay contact"),
     24: (DucoCO2HumValve, "humidity and CO2 valve"),
 }
 
@@ -617,8 +674,10 @@ ducobox_modules = {
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
 
-    dbb = DucoBoxBase("/dev/ttyUSB0", simulate=False)
+    dbb = DucoBoxBase("/dev/ttyUSB0", simulate=True)
     loop.run_until_complete(dbb.create_serial_connection())
     loop.run_until_complete(dbb.scan_modules())
     loop.run_until_complete(dbb.update_sensors())
     loop.run_forever()
+
+    print("\r\n".join(dbb.sensor_alias))
