@@ -60,9 +60,6 @@ async def async_setup_entry(
         sensors = [
             DocuSensor(coordinator, sensor, device_id) for sensor in module.sensors
         ]
-        sensors += [
-            DocuSensor(coordinator, sensor, device_id) for sensor in module.actuators
-        ]
 
         # Add all entities to HA
         async_add_entities(sensors, update_before_add=True)

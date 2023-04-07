@@ -126,7 +126,7 @@ class GenericActuator(GenericSensor):
 class DucoBoxBase:
     """
     DucoBoxBase initializes all connected valves/devices
-    Creates a list of all sensors [GenericSensor] and actuators [GenericActuator]
+    Creates a list of all sensors [GenericSensor|GenericActuator]
     """
 
     def __init__(self, serial_port, baudrate=9600, slave_adr=1, simulate=False):
@@ -134,7 +134,6 @@ class DucoBoxBase:
         self.retry_attempts = 5
         self.retry = self.retry_attempts
         self.sensors = []
-        self.actuators = []
         self.modules = []
         self.serial_port = serial_port
         self.baudrate = baudrate
@@ -220,12 +219,8 @@ class DucoBoxBase:
         """Fetch all data from all sensors"""
 
         for id, module in enumerate(self.modules):
-            # remove_ids = []
             for sensor in module.sensors:
                 await sensor.update()
-
-            # for actuator in module.actuators:
-            #    await actuator.update()
 
 
 class DucoDevice:
@@ -248,10 +243,8 @@ class DucoDevice:
 class DucoBox(DucoDevice):
     name = "Master module"
 
-    def __init__(
-        self, mb_client: AsyncioInstrument | None, base_adr: int, register_sensors=None
-    ) -> None:
-        self.mb_client = mb_client
+    def __init__(self, mb_client: AsyncioInstrument | None, base_adr: int) -> None:
+        DucoDevice.__init__(self)
         self.base_adr = base_adr
 
         sensors = [
@@ -316,8 +309,6 @@ class DucoBox(DucoDevice):
                 input_reg=base_adr + 9,
             ),
         ]
-
-        self.actuators = []
 
         self.register_sensors(sensors)
 
@@ -656,7 +647,7 @@ class DucoRelay(DucoDevice):
 
 
 ducobox_modules = {
-    # 10: (DucoBox, "master"),
+    10: (DucoBox, "master"),
     11: (DucoSensorlessValve, "Sensorless valve"),
     12: (DucoCO2Valve, "CO2 valve"),
     13: (DucoHumValve, "humidity valve"),
