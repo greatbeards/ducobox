@@ -502,6 +502,7 @@ class DucoValve:
                 module=self,
                 name="temperature",
                 input_reg=base_adr + 3,
+                scale=0.1,
             ),
             GenericActuator(
                 mb_client,
@@ -598,6 +599,7 @@ class DucoVentValve(DucoValve, DucoDevice):
                 module=self,
                 name="temperature",
                 input_reg=base_adr + 3,
+                scale=0.1,
             ),
             GenericSensor(
                 mb_client,
