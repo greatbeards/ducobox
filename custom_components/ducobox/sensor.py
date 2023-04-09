@@ -8,6 +8,7 @@ from homeassistant.const import (
     VOLUME_FLOW_RATE_CUBIC_METERS_PER_HOUR,
     CONCENTRATION_PARTS_PER_MILLION,
     PERCENTAGE,
+    TIME_MINUTES
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -27,7 +28,7 @@ from . import DOMAIN
 from .ducobox import GenericSensor, DucoBox
 from datetime import timedelta
 
-SCAN_INTERVAL = timedelta(seconds=5)
+# SCAN_INTERVAL = timedelta(seconds=5)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -102,14 +103,24 @@ class DocuSensor(CoordinatorEntity, SensorEntity):
         self.sens_obj = sens
         self.device_id = device_id
 
-        if "temperature" in sens.name:
+        if sens.name in "temperature":
             self.unit = TEMP_CELSIUS
-        elif "vent" in sens.name:
+        elif sens.name in [
+            "ventilation level",
+            "auto min",
+            "auto max",
+        ]:
             self.unit = PERCENTAGE
-        elif "co2" in sens.name:
+        elif "CO2" in sens.name:
             self.unit = CONCENTRATION_PARTS_PER_MILLION
-        elif "flow" in sens.name:
+        elif sens.name in ["flow", "inlet"]:
             self.unit = VOLUME_FLOW_RATE_CUBIC_METERS_PER_HOUR
+        elif "humidity" in sens.name and not "delta" in sens.name:
+            self.unit = PERCENTAGE
+        elif "button" in sens.name:
+            self.unit = PERCENTAGE
+        elif "Time" in sens.name:
+            self.unit = TIME_MINUTES
         else:
             self.unit = None
 
