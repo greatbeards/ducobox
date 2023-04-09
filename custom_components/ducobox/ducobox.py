@@ -69,7 +69,7 @@ class GenericSensor:
         if self.holding_reg:
             new_val = await self.read_holding_reg(self.holding_reg)
         else:
-            new_val = await self.read_input_reg(self.input_reg) * self.scale
+            new_val = await self.read_input_reg(self.input_reg)
 
         if new_val:
             self.value = new_val * self.scale
