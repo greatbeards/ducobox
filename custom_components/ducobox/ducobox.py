@@ -67,9 +67,14 @@ class GenericSensor:
             return
 
         if self.holding_reg:
-            self.value = await self.read_holding_reg(self.holding_reg) * self.scale
+            new_val = await self.read_holding_reg(self.holding_reg)
         else:
-            self.value = await self.read_input_reg(self.input_reg) * self.scale
+            new_val = await self.read_input_reg(self.input_reg) * self.scale
+
+        if new_val:
+            self.value = new_val * self.scale
+        else:
+            self.value = new_val
 
     async def read_input_reg(self, adress):
         while self.retry > 1:
