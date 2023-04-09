@@ -35,7 +35,9 @@ class DucoBoxException(Exception):
 class GenericSensor:
     """Generic class to read a setting from the instrument."""
 
-    def __init__(self, modbus_client, module, name, holding_reg=None, input_reg=None):
+    def __init__(
+        self, modbus_client, module, name, holding_reg=None, input_reg=None, scale=1.0
+    ):
         self.name = name
         self.mb_client = modbus_client
         self.module = module
@@ -44,6 +46,7 @@ class GenericSensor:
         self.retry = self.retry_attempts
         self.holding_reg = holding_reg
         self.input_reg = input_reg
+        self.scale = scale
 
         self.alias = (
             str(self.module.name)
@@ -64,9 +67,9 @@ class GenericSensor:
             return
 
         if self.holding_reg:
-            self.value = await self.read_holding_reg(self.holding_reg)
+            self.value = await self.read_holding_reg(self.holding_reg) * self.scale
         else:
-            self.value = await self.read_input_reg(self.input_reg)
+            self.value = await self.read_input_reg(self.input_reg) * self.scale
 
     async def read_input_reg(self, adress):
         while self.retry > 1:
@@ -101,12 +104,14 @@ class GenericSensor:
 class GenericActuator(GenericSensor):
     """Generic class to write a setting to the instrument."""
 
-    def __init__(self, modbus_client, module, name, holding_reg):
-        super().__init__(modbus_client, module, name, holding_reg=holding_reg)
+    def __init__(self, modbus_client, module, name, holding_reg, scale=1.0):
+        super().__init__(
+            modbus_client, module, name, holding_reg=holding_reg, scale=scale
+        )
 
     def write(self, value):
         if not SIMULATION_MODE:
-            self._write_holding_reg(self.holding_reg, value)
+            self._write_holding_reg(self.holding_reg, value / self.scale)
         else:
             self.value = value
 
@@ -334,6 +339,7 @@ class DucoGenericSensor:
                 module=self,
                 name="temperature",
                 input_reg=base_adr + 3,
+                scale=0.1,
             ),
             GenericSensor(
                 mb_client,
@@ -423,12 +429,14 @@ class DucoHumSensor(DucoGenericSensor, DucoDevice):
                 module=self,
                 name="humidity",
                 input_reg=base_adr + 5,
+                scale=0.1,
             ),
             GenericActuator(
                 mb_client,
                 module=self,
                 name="humidity setpoint",
                 holding_reg=base_adr + 2,
+                scale=0.1,
             ),
             GenericActuator(
                 mb_client,
