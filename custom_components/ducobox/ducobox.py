@@ -43,6 +43,7 @@ class GenericSensor:
         holding_reg=None,
         input_reg=None,
         number_of_decimals=0,
+        value_mapping=None,
     ):
         self.name = name
         self.mb_client = modbus_client
@@ -53,6 +54,7 @@ class GenericSensor:
         self.holding_reg = holding_reg
         self.input_reg = input_reg
         self.number_of_decimals = number_of_decimals
+        self.value_mapping = value_mapping
 
         self.alias = (
             str(self.module.name)
@@ -68,8 +70,8 @@ class GenericSensor:
 
     async def update(self):
         if SIMULATION_MODE:
-            new_val = random.randint(0, 100)
-            if new_val < 50:
+            new_val = random.randint(0, 10)
+            if new_val > 8:
                 new_val = None
             await asyncio.sleep(0.01)
         else:
@@ -81,6 +83,16 @@ class GenericSensor:
                 new_val = await self._read_input_reg(
                     self.input_reg, self.number_of_decimals
                 )
+
+        self.value = new_val
+        if self.value_mapping:
+            try:
+                self.value = self.value_mapping[new_val]
+            except KeyError:
+                _LOGGER.warning(
+                    "Unable to map value [%s] for %s" % (str(new_val), self.alias)
+                )
+                self.value = None
 
     async def _read_input_reg(self, adress, number_of_decimals=0):
         while self.retry > 1:
@@ -309,6 +321,7 @@ class DucoBox(DucoDevice):
                 module=self,
                 name="status",
                 input_reg=base_adr + 1,
+                value_mapping=status_descr,
             ),
             GenericSensor(
                 mb_client,
@@ -359,6 +372,7 @@ class DucoGenericSensor:
                 module=self,
                 name="status",
                 input_reg=base_adr + 1,
+                value_mapping=status_descr,
             ),
             # Not for batter powered sensor
             GenericSensor(
@@ -512,6 +526,7 @@ class DucoValve:
                 module=self,
                 name="status",
                 input_reg=base_adr + 1,
+                value_mapping=status_descr,
             ),
             GenericSensor(
                 mb_client,
@@ -647,6 +662,7 @@ class DucoRelay(DucoDevice):
                 module=self,
                 name="status",
                 input_reg=base_adr + 1,
+                value_mapping=status_descr,
             ),
             GenericSensor(
                 mb_client,
@@ -712,7 +728,8 @@ if __name__ == "__main__":
     while True:
         time.sleep(1)
         loop.run_until_complete(dbb.update_sensors())
+        print(
+            "\r\n".join(["%s: %s" % (sens.alias, sens.value) for sens in dbb.sensors])
+        )
 
     loop.run_forever()
-
-    print("\r\n".join(dbb.sensor_alias))
