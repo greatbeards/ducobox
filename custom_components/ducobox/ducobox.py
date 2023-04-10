@@ -133,7 +133,17 @@ class GenericSensor:
 class GenericActuator(GenericSensor):
     """Generic class to write a setting to the instrument."""
 
-    def __init__(self, modbus_client, module, name, holding_reg, number_of_decimals=0):
+    def __init__(
+        self,
+        modbus_client,
+        module,
+        name,
+        holding_reg,
+        number_of_decimals=0,
+        min_value=0,
+        max_value=100,
+        step_value=1,
+    ):
         super().__init__(
             modbus_client,
             module,
@@ -141,6 +151,9 @@ class GenericActuator(GenericSensor):
             holding_reg=holding_reg,
             number_of_decimals=number_of_decimals,
         )
+        self.min_value = min_value
+        self.max_value = max_value
+        self.step_value = step_value
 
     def write(self, value):
         if not SIMULATION_MODE:
@@ -303,18 +316,27 @@ class DucoBox(DucoDevice):
                 module=self,
                 name="auto min",
                 holding_reg=base_adr + 5,
+                min_value=0,
+                max_value=100,
+                step_value=5,
             ),
             GenericActuator(
                 mb_client,
                 module=self,
                 name="auto max",
                 holding_reg=base_adr + 6,
+                min_value=0,
+                max_value=100,
+                step_value=5,
             ),
             GenericActuator(
                 mb_client,
                 module=self,
                 name="action",
                 holding_reg=base_adr + 9,
+                min_value=1,
+                max_value=6,
+                step_value=1,
             ),
             GenericSensor(
                 mb_client,
@@ -393,30 +415,45 @@ class DucoGenericSensor:
                 module=self,
                 name="button 1",
                 holding_reg=base_adr + 4,
+                min_value=0,
+                max_value=100,
+                step_value=5,
             ),
             GenericActuator(
                 mb_client,
                 module=self,
                 name="button 2",
                 holding_reg=base_adr + 5,
+                min_value=0,
+                max_value=100,
+                step_value=5,
             ),
             GenericActuator(
                 mb_client,
                 module=self,
                 name="button 3",
                 holding_reg=base_adr + 6,
+                min_value=0,
+                max_value=100,
+                step_value=5,
             ),
             GenericActuator(
                 mb_client,
                 module=self,
                 name="Manual Time",
                 holding_reg=base_adr + 7,
+                min_value=5,
+                max_value=9999,
+                step_value=5,
             ),
             GenericActuator(
                 mb_client,
                 module=self,
                 name="action",
                 holding_reg=base_adr + 9,
+                min_value=1,
+                max_value=6,
+                step_value=1,
             ),
         ]
 
@@ -507,6 +544,9 @@ class DucoValve:
                 module=self,
                 name="auto min",
                 holding_reg=base_adr + 5,
+                min_value=10,
+                max_value=100,
+                step_value=5,
             ),
             GenericActuator(
                 mb_client,
