@@ -11,7 +11,7 @@ _LOGGER = logging.getLogger(__name__)
 
 USER_CONFIG = vol.Schema(
     {
-        vol.Required("serial_port", default="/dev/ttyUSB0"): str,
+        vol.Required("serial_port", default=""): str,
         vol.Required("baudrate", default=9600): int,
         vol.Optional("slave_adr", default=1): vol.All(int, vol.Range(min=1, max=32)),
         vol.Optional("simulate", default=0): vol.All(int, vol.Range(min=0, max=1)),
@@ -20,7 +20,6 @@ USER_CONFIG = vol.Schema(
 
 
 async def check_config(user_input):
-
     ret = False
     try:
         dbb = DucoBoxBase(**user_input)
