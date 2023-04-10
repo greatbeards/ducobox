@@ -470,14 +470,13 @@ class DucoHumSensor(DucoGenericSensor, DucoDevice):
                 module=self,
                 name="humidity",
                 input_reg=base_adr + 5,
-                number_of_decimals=1,
+                number_of_decimals=2,
             ),
             GenericActuator(
                 mb_client,
                 module=self,
                 name="humidity setpoint",
                 holding_reg=base_adr + 2,
-                number_of_decimals=1,
             ),
             GenericActuator(
                 mb_client,
