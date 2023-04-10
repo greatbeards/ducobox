@@ -36,7 +36,13 @@ class GenericSensor:
     """Generic class to read a setting from the instrument."""
 
     def __init__(
-        self, modbus_client, module, name, holding_reg=None, input_reg=None, scale=1.0
+        self,
+        modbus_client,
+        module,
+        name,
+        holding_reg=None,
+        input_reg=None,
+        number_of_decimals=0,
     ):
         self.name = name
         self.mb_client = modbus_client
@@ -46,7 +52,7 @@ class GenericSensor:
         self.retry = self.retry_attempts
         self.holding_reg = holding_reg
         self.input_reg = input_reg
-        self.scale = scale
+        self.number_of_decimals = number_of_decimals
 
         self.alias = (
             str(self.module.name)
@@ -62,25 +68,28 @@ class GenericSensor:
 
     async def update(self):
         if SIMULATION_MODE:
-            self.value = random.randint(0, 100)
+            new_val = random.randint(0, 100)
+            if new_val < 50:
+                new_val = None
             await asyncio.sleep(0.01)
-            return
-
-        if self.holding_reg:
-            new_val = await self.read_holding_reg(self.holding_reg)
         else:
-            new_val = await self.read_input_reg(self.input_reg)
+            if self.holding_reg:
+                new_val = await self._read_holding_reg(
+                    self.holding_reg, self.number_of_decimals
+                )
+            else:
+                new_val = await self._read_input_reg(
+                    self.input_reg, self.number_of_decimals
+                )
 
-        if new_val:
-            self.value = new_val * self.scale
-        else:
-            self.value = new_val
-
-    async def read_input_reg(self, adress):
+    async def _read_input_reg(self, adress, number_of_decimals=0):
         while self.retry > 1:
             try:
                 ret = await self.mb_client.read_register(
-                    adress - 1, functioncode=4, signed=True
+                    adress - 1,
+                    functioncode=4,
+                    signed=True,
+                    number_of_decimals=number_of_decimals,
                 )
                 self.retry = self.retry_attempts
                 return ret
@@ -89,11 +98,14 @@ class GenericSensor:
 
         _LOGGER.warning("Disabled %s - unresponsive" % self.alias)
 
-    async def read_holding_reg(self, adress):
+    async def _read_holding_reg(self, adress, number_of_decimals=0):
         while self.retry > 1:
             try:
                 ret = await self.mb_client.read_register(
-                    adress - 1, functioncode=3, signed=True
+                    adress - 1,
+                    functioncode=3,
+                    signed=True,
+                    number_of_decimals=number_of_decimals,
                 )
                 self.retry = self.retry_attempts
                 return ret
@@ -109,22 +121,32 @@ class GenericSensor:
 class GenericActuator(GenericSensor):
     """Generic class to write a setting to the instrument."""
 
-    def __init__(self, modbus_client, module, name, holding_reg, scale=1.0):
+    def __init__(self, modbus_client, module, name, holding_reg, number_of_decimals=0):
         super().__init__(
-            modbus_client, module, name, holding_reg=holding_reg, scale=scale
+            modbus_client,
+            module,
+            name,
+            holding_reg=holding_reg,
+            number_of_decimals=number_of_decimals,
         )
 
     def write(self, value):
         if not SIMULATION_MODE:
-            self._write_holding_reg(self.holding_reg, value / self.scale)
+            self._write_holding_reg(
+                self.holding_reg, value, number_of_decimals=self.number_of_decimals
+            )
         else:
             self.value = value
 
-    def _write_holding_reg(self, adress, value):
+    def _write_holding_reg(self, adress, value, number_of_decimals=0):
         while self.retry > 1:
             try:
                 ret = self.mb_client.write_register(
-                    adress - 1, value, functioncode=16, signed=True
+                    adress - 1,
+                    value,
+                    functioncode=16,
+                    signed=True,
+                    number_of_decimals=number_of_decimals,
                 )
                 self.retry = self.retry_attempts
                 return ret
@@ -344,7 +366,7 @@ class DucoGenericSensor:
                 module=self,
                 name="temperature",
                 input_reg=base_adr + 3,
-                scale=0.1,
+                number_of_decimals=1,
             ),
             GenericSensor(
                 mb_client,
@@ -434,14 +456,14 @@ class DucoHumSensor(DucoGenericSensor, DucoDevice):
                 module=self,
                 name="humidity",
                 input_reg=base_adr + 5,
-                scale=0.1,
+                number_of_decimals=1,
             ),
             GenericActuator(
                 mb_client,
                 module=self,
                 name="humidity setpoint",
                 holding_reg=base_adr + 2,
-                scale=0.1,
+                number_of_decimals=1,
             ),
             GenericActuator(
                 mb_client,
@@ -502,7 +524,7 @@ class DucoValve:
                 module=self,
                 name="temperature",
                 input_reg=base_adr + 3,
-                scale=0.1,
+                number_of_decimals=1,
             ),
             GenericActuator(
                 mb_client,
@@ -599,7 +621,7 @@ class DucoVentValve(DucoValve, DucoDevice):
                 module=self,
                 name="temperature",
                 input_reg=base_adr + 3,
-                scale=0.1,
+                number_of_decimals=1,
             ),
             GenericSensor(
                 mb_client,
@@ -678,12 +700,19 @@ ducobox_modules = {
 ###########################################################
 ###########################################################
 if __name__ == "__main__":
+    import time
+
     loop = asyncio.get_event_loop()
 
     dbb = DucoBoxBase("/dev/ttyUSB0", simulate=True)
     loop.run_until_complete(dbb.create_serial_connection())
     loop.run_until_complete(dbb.scan_modules())
     loop.run_until_complete(dbb.update_sensors())
+
+    while True:
+        time.sleep(1)
+        loop.run_until_complete(dbb.update_sensors())
+
     loop.run_forever()
 
     print("\r\n".join(dbb.sensor_alias))
