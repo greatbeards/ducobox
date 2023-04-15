@@ -3,12 +3,17 @@ from __future__ import annotations
 import logging
 
 from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.number import NumberEntity
+from homeassistant.components.switch import SwitchEntity
+from homeassistant.components.select import SelectEntity
+
+from homeassistant.components.sensor.const import SensorDeviceClass
 from homeassistant.const import (
     TEMP_CELSIUS,
     VOLUME_FLOW_RATE_CUBIC_METERS_PER_HOUR,
     CONCENTRATION_PARTS_PER_MILLION,
     PERCENTAGE,
-    TIME_MINUTES
+    TIME_MINUTES,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -140,9 +145,18 @@ class DocuSensor(CoordinatorEntity, SensorEntity):
         return self.sens_obj.value
 
     @property
+    def options(self) -> list[str] | None:
+        return self.sens_obj.value_mapping
+
+    @property
     def unit_of_measurement(self) -> str:
         """Return the unit of measurement."""
         return self.unit
+
+    @property
+    def device_class(self) -> str | None:
+        if self.sens_obj.value_mapping:
+            return SensorDeviceClass.ENUM
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -161,3 +175,21 @@ class DocuSensor(CoordinatorEntity, SensorEntity):
             manufacturer="DucoBox Focus",
             model=self.sens_obj.module.name,
         )
+
+
+class DucoNumberController(CoordinatorEntity, NumberEntity):
+    """Use to control valve flow, setpoints of CO2/Humidity"""
+
+    pass
+
+
+class DucoSwitch(CoordinatorEntity, SwitchEntity):
+    """Use to control humidity delta option"""
+
+    pass
+
+
+class DucoAction(CoordinatorEntity, SelectEntity):
+    """Use to control the action states"""
+
+    pass

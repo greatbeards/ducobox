@@ -43,6 +43,7 @@ class GenericSensor:
         holding_reg=None,
         input_reg=None,
         number_of_decimals=0,
+        value_mapping=None,
     ):
         self.name = name
         self.mb_client = modbus_client
@@ -53,6 +54,7 @@ class GenericSensor:
         self.holding_reg = holding_reg
         self.input_reg = input_reg
         self.number_of_decimals = number_of_decimals
+        self.value_mapping = value_mapping
 
         self.alias = (
             str(self.module.name)
@@ -68,8 +70,8 @@ class GenericSensor:
 
     async def update(self):
         if SIMULATION_MODE:
-            new_val = random.randint(0, 100)
-            if new_val < 50:
+            new_val = random.randint(0, 10)
+            if new_val > 8:
                 new_val = None
             await asyncio.sleep(0.01)
         else:
@@ -81,6 +83,16 @@ class GenericSensor:
                 new_val = await self._read_input_reg(
                     self.input_reg, self.number_of_decimals
                 )
+
+        self.value = new_val
+        if self.value_mapping:
+            try:
+                self.value = self.value_mapping[new_val]
+            except KeyError:
+                _LOGGER.warning(
+                    "Unable to map value [%s] for %s" % (str(new_val), self.alias)
+                )
+                self.value = None
 
     async def _read_input_reg(self, adress, number_of_decimals=0):
         while self.retry > 1:
@@ -121,7 +133,17 @@ class GenericSensor:
 class GenericActuator(GenericSensor):
     """Generic class to write a setting to the instrument."""
 
-    def __init__(self, modbus_client, module, name, holding_reg, number_of_decimals=0):
+    def __init__(
+        self,
+        modbus_client,
+        module,
+        name,
+        holding_reg,
+        number_of_decimals=0,
+        min_value=0,
+        max_value=100,
+        step_value=1,
+    ):
         super().__init__(
             modbus_client,
             module,
@@ -129,6 +151,9 @@ class GenericActuator(GenericSensor):
             holding_reg=holding_reg,
             number_of_decimals=number_of_decimals,
         )
+        self.min_value = min_value
+        self.max_value = max_value
+        self.step_value = step_value
 
     def write(self, value):
         if not SIMULATION_MODE:
@@ -291,24 +316,34 @@ class DucoBox(DucoDevice):
                 module=self,
                 name="auto min",
                 holding_reg=base_adr + 5,
+                min_value=0,
+                max_value=100,
+                step_value=5,
             ),
             GenericActuator(
                 mb_client,
                 module=self,
                 name="auto max",
                 holding_reg=base_adr + 6,
+                min_value=0,
+                max_value=100,
+                step_value=5,
             ),
             GenericActuator(
                 mb_client,
                 module=self,
                 name="action",
                 holding_reg=base_adr + 9,
+                min_value=1,
+                max_value=6,
+                step_value=1,
             ),
             GenericSensor(
                 mb_client,
                 module=self,
                 name="status",
                 input_reg=base_adr + 1,
+                value_mapping=status_descr,
             ),
             GenericSensor(
                 mb_client,
@@ -359,6 +394,7 @@ class DucoGenericSensor:
                 module=self,
                 name="status",
                 input_reg=base_adr + 1,
+                value_mapping=status_descr,
             ),
             # Not for batter powered sensor
             GenericSensor(
@@ -379,30 +415,45 @@ class DucoGenericSensor:
                 module=self,
                 name="button 1",
                 holding_reg=base_adr + 4,
+                min_value=0,
+                max_value=100,
+                step_value=5,
             ),
             GenericActuator(
                 mb_client,
                 module=self,
                 name="button 2",
                 holding_reg=base_adr + 5,
+                min_value=0,
+                max_value=100,
+                step_value=5,
             ),
             GenericActuator(
                 mb_client,
                 module=self,
                 name="button 3",
                 holding_reg=base_adr + 6,
+                min_value=0,
+                max_value=100,
+                step_value=5,
             ),
             GenericActuator(
                 mb_client,
                 module=self,
                 name="Manual Time",
                 holding_reg=base_adr + 7,
+                min_value=5,
+                max_value=9999,
+                step_value=5,
             ),
             GenericActuator(
                 mb_client,
                 module=self,
                 name="action",
                 holding_reg=base_adr + 9,
+                min_value=1,
+                max_value=6,
+                step_value=1,
             ),
         ]
 
@@ -456,14 +507,13 @@ class DucoHumSensor(DucoGenericSensor, DucoDevice):
                 module=self,
                 name="humidity",
                 input_reg=base_adr + 5,
-                number_of_decimals=1,
+                number_of_decimals=2,
             ),
             GenericActuator(
                 mb_client,
                 module=self,
                 name="humidity setpoint",
                 holding_reg=base_adr + 2,
-                number_of_decimals=1,
             ),
             GenericActuator(
                 mb_client,
@@ -494,6 +544,9 @@ class DucoValve:
                 module=self,
                 name="auto min",
                 holding_reg=base_adr + 5,
+                min_value=10,
+                max_value=100,
+                step_value=5,
             ),
             GenericActuator(
                 mb_client,
@@ -512,6 +565,7 @@ class DucoValve:
                 module=self,
                 name="status",
                 input_reg=base_adr + 1,
+                value_mapping=status_descr,
             ),
             GenericSensor(
                 mb_client,
@@ -647,6 +701,7 @@ class DucoRelay(DucoDevice):
                 module=self,
                 name="status",
                 input_reg=base_adr + 1,
+                value_mapping=status_descr,
             ),
             GenericSensor(
                 mb_client,
@@ -712,7 +767,8 @@ if __name__ == "__main__":
     while True:
         time.sleep(1)
         loop.run_until_complete(dbb.update_sensors())
+        print(
+            "\r\n".join(["%s: %s" % (sens.alias, sens.value) for sens in dbb.sensors])
+        )
 
     loop.run_forever()
-
-    print("\r\n".join(dbb.sensor_alias))
