@@ -165,18 +165,17 @@ class GenericActuator(GenericSensor):
         self.step_value = step_value
         self.name = name
 
-    def write(self, value):
+    async def write(self, value):
         if not SIMULATION_MODE:
-            self._write_holding_reg(
+            await self._write_holding_reg(
                 self.holding_reg, value, number_of_decimals=self.number_of_decimals
             )
-        else:
-            self.value = value
+        await self.update()
 
-    def _write_holding_reg(self, adress, value, number_of_decimals=0):
+    async def _write_holding_reg(self, adress, value, number_of_decimals=0):
         while self.retry > 1:
             try:
-                ret = self.mb_client.write_register(
+                ret = await self.mb_client.write_register(
                     adress - 1,
                     value,
                     functioncode=16,

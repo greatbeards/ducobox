@@ -39,7 +39,7 @@ from homeassistant.helpers.update_coordinator import (
 from . import DOMAIN
 from .ducobox import GenericSensor, DucoBox, GenericActuator
 from datetime import timedelta
-from . import get_unit
+from . import get_unit, MyCoordinator
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -132,7 +132,7 @@ class DucoNumberController(CoordinatorEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Update the current value."""
         _LOGGER.info("%s Writing %f " % (self.sens_obj.alias, value))
-        return self.sens_obj.write(value)
+        await self.sens_obj.write(value)
 
     @property
     def device_class(self) -> str | None:
