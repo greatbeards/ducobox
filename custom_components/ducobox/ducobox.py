@@ -145,15 +145,25 @@ class GenericActuator(GenericSensor):
         step_value=1,
     ):
         super().__init__(
-            modbus_client,
-            module,
-            name,
+            modbus_client=modbus_client,
+            module=module,
+            name=name,
             holding_reg=holding_reg,
+            input_reg=None,
             number_of_decimals=number_of_decimals,
+            value_mapping=None,
         )
+        self.mb_client = modbus_client
+        self.module = module
+        self.value = None
+        self.retry_attempts = 5
+        self.retry = self.retry_attempts
+        self.holding_reg = holding_reg
+        self.number_of_decimals = number_of_decimals
         self.min_value = min_value
         self.max_value = max_value
         self.step_value = step_value
+        self.name = name
 
     def write(self, value):
         if not SIMULATION_MODE:

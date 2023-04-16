@@ -1,4 +1,3 @@
-"""Platform for sensor integration."""
 from __future__ import annotations
 import logging
 
@@ -42,44 +41,6 @@ from .ducobox import GenericSensor, DucoBox, GenericActuator
 from datetime import timedelta
 from . import get_unit
 
-ENTITY_TYPES: tuple[NumberEntityDescription, ...] = (
-    NumberEntityDescription(
-        key="flow",
-        name="flow",
-        native_max_value=9999,
-        native_step=1,
-        native_min_value=0,
-        native_unit_of_measurement=UnitOfTime.SECONDS,
-        entity_category=EntityCategory.CONFIG,
-    ),
-    NumberEntityDescription(
-        key="screensaverBrightness",
-        name="Screensaver brightness",
-        native_max_value=255,
-        native_step=1,
-        # native_min_value=0,
-        # entity_category=EntityCategory.CONFIG,
-    ),
-    NumberEntityDescription(
-        key="timeToScreenOffV2",
-        name="Screen off timer",
-        native_max_value=9999,
-        native_step=1,
-        native_min_value=0,
-        # native_unit_of_measurement=UnitOfTime.SECONDS,
-        # entity_category=EntityCategory.CONFIG,
-    ),
-    NumberEntityDescription(
-        key="screenBrightness",
-        name="Screen brightness",
-        native_max_value=255,
-        native_step=1,
-        native_min_value=0,
-    ),
-)
-
-
-# SCAN_INTERVAL = timedelta(seconds=5)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -109,57 +70,38 @@ async def async_setup_entry(
         device_id = module.base_adr
         sensors = []
         for sens in module.sensors:
-            if isinstance(sens, GenericSensor):
-                new_entity = DocuSensor(coordinator, sens, device_id)
+            if isinstance(sens, GenericActuator):
+                new_entity = DucoNumberController(coordinator, sens, device_id)
                 sensors.append(new_entity)
 
         # Add all entities to HA
         async_add_entities(sensors, update_before_add=True)
 
 
-class MyCoordinator(DataUpdateCoordinator):
-    """My custom coordinator."""
+class DucoNumberController(CoordinatorEntity, NumberEntity):
+    """Use to control valve flow, setpoints of CO2/Humidity"""
 
-    def __init__(self, hass, dbb):
-        """Initialize my coordinator."""
-        super().__init__(
-            hass,
-            _LOGGER,
-            # Name of the data. For logging purposes.
-            name="DucoBox coordinator",
-            # Polling interval. Will only be polled if there are subscribers.
-            update_interval=timedelta(seconds=30),
-        )
-        self.dbb = dbb
-
-    async def _async_update_data(self):
-        """Fetch data from API endpoint.
-
-        This is the place to pre-process the data to lookup tables
-        so entities can quickly look up their data.
-        """
-        await self.dbb.update_sensors()
-
-
-
-
-class DocuSensor(CoordinatorEntity, SensorEntity):
-    """Representation of a sensor."""
-
-    _attr_unique_id = True
+    # _attr_unique_id = True
 
     def __init__(
         self,
         coordinator: MyCoordinator,
-        sens: GenericSensor | GenericActuator,
+        sens: GenericActuator,
         device_id,
     ) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator, context=device_id)
+        CoordinatorEntity.__init__(self, coordinator, context=device_id)
+        NumberEntity.__init__(self)
         self.sens_obj = sens
         self.device_id = device_id
 
-        self.unit = get_unit(self.name)
+    @property
+    def entity_category(self):
+        return EntityCategory.CONFIG
+
+    @property
+    def native_unit_of_measurement(self) -> str:
+        return get_unit(self.name)
 
     @property
     def name(self) -> str:
@@ -172,23 +114,32 @@ class DocuSensor(CoordinatorEntity, SensorEntity):
         return self.sens_obj.alias
 
     @property
-    def state(self):
-        """Return the state of the sensor."""
+    def native_max_value(self):
+        return self.sens_obj.max_value
+
+    @property
+    def native_min_value(self):
+        return self.sens_obj.min_value
+
+    @property
+    def native_step(self):
+        return self.sens_obj.step_value
+
+    @property
+    def native_value(self) -> int | None:
         return self.sens_obj.value
 
-    @property
-    def options(self) -> list[str] | None:
-        return self.sens_obj.value_mapping
-
-    @property
-    def unit_of_measurement(self) -> str:
-        """Return the unit of measurement."""
-        return self.unit
+    async def async_set_native_value(self, value: float) -> None:
+        """Update the current value."""
+        _LOGGER.info("%s Writing %f " % (self.sens_obj.alias, value))
+        return self.sens_obj.write(value)
 
     @property
     def device_class(self) -> str | None:
         if self.sens_obj.value_mapping:
             return SensorDeviceClass.ENUM
+        else:
+            return NumberDeviceClass.VOLUME
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -207,15 +158,3 @@ class DocuSensor(CoordinatorEntity, SensorEntity):
             manufacturer="DucoBox Focus",
             model=self.sens_obj.module.name,
         )
-
-
-class DucoSwitch(CoordinatorEntity, SwitchEntity):
-    """Use to control humidity delta option"""
-
-    pass
-
-
-class DucoAction(CoordinatorEntity, SelectEntity):
-    """Use to control the action states"""
-
-    pass
