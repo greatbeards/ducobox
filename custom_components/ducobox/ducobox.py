@@ -13,7 +13,7 @@ _LOGGER = logging.getLogger(__name__)
 
 modbus_lock = Lock()
 
-status_descr = {
+status_mapping = {
     0: "Auto",
     1: "10 min high",
     2: "20 min high",
@@ -26,6 +26,16 @@ status_descr = {
     9: "Permanent middle",
     10: "Permanente high",
     99: "Error",
+}
+
+action_mapping = {
+    0: "Node visualisation OFF",
+    1: "Node visualisation ON",
+    2: "Manual 1",
+    3: "Manual 1",
+    4: "Manual 1",
+    5: "Automatic",
+    6: "Away",
 }
 
 SIMULATION_MODE = False
@@ -153,6 +163,7 @@ class GenericActuator(GenericSensor):
         min_value=0,
         max_value=100,
         step_value=1,
+        value_mapping=None,
     ):
         super().__init__(
             modbus_client=modbus_client,
@@ -161,21 +172,23 @@ class GenericActuator(GenericSensor):
             holding_reg=holding_reg,
             input_reg=None,
             number_of_decimals=number_of_decimals,
-            value_mapping=None,
+            value_mapping=value_mapping,
         )
-        self.mb_client = modbus_client
-        self.module = module
-        self.value = None
-        self.retry_attempts = 5
-        self.retry = self.retry_attempts
-        self.holding_reg = holding_reg
-        self.number_of_decimals = number_of_decimals
         self.min_value = min_value
         self.max_value = max_value
         self.step_value = step_value
-        self.name = name
+        self.inverse_value_mapping = None
+        if value_mapping:
+            self.inverse_value_mapping = {v: k for k, v in value_mapping.items()}
 
     async def write(self, value):
+        if self.inverse_value_mapping:
+            if not value in self.inverse_value_mapping:
+                _LOGGER.error(
+                    "%s not present in value mapping for %s" % (str(value), self.name)
+                )
+                return
+            value = self.inverse_value_mapping[value]
         if not SIMULATION_MODE:
             try:
                 modbus_lock.acquire()
@@ -328,11 +341,14 @@ class DucoBox(DucoDevice):
         self.base_adr = base_adr
 
         sensors = [
-            GenericSensor(
+            GenericActuator(
                 mb_client,
                 module=self,
                 name="ventilation setpoint",
                 holding_reg=base_adr + 0,
+                min_value=-1,
+                max_value=100,
+                step_value=5,
             ),
             GenericActuator(
                 mb_client,
@@ -360,13 +376,14 @@ class DucoBox(DucoDevice):
                 min_value=1,
                 max_value=6,
                 step_value=1,
+                value_mapping=action_mapping,
             ),
             GenericSensor(
                 mb_client,
                 module=self,
                 name="status",
                 input_reg=base_adr + 1,
-                value_mapping=status_descr,
+                value_mapping=status_mapping,
             ),
             GenericSensor(
                 mb_client,
@@ -417,7 +434,7 @@ class DucoGenericSensor:
                 module=self,
                 name="status",
                 input_reg=base_adr + 1,
-                value_mapping=status_descr,
+                value_mapping=status_mapping,
             ),
             # Not for batter powered sensor
             GenericSensor(
@@ -477,6 +494,7 @@ class DucoGenericSensor:
                 min_value=1,
                 max_value=6,
                 step_value=1,
+                value_mapping=action_mapping,
             ),
         ]
 
@@ -588,7 +606,7 @@ class DucoValve:
                 module=self,
                 name="status",
                 input_reg=base_adr + 1,
-                value_mapping=status_descr,
+                value_mapping=status_mapping,
             ),
             GenericSensor(
                 mb_client,
@@ -608,6 +626,9 @@ class DucoValve:
                 module=self,
                 name="ventilation setpoint",
                 holding_reg=base_adr + 0,
+                min_value=-1,
+                max_value=100,
+                step_value=5,
             ),
             GenericActuator(
                 mb_client,
@@ -620,6 +641,10 @@ class DucoValve:
                 module=self,
                 name="action",
                 holding_reg=base_adr + 9,
+                min_value=1,
+                max_value=6,
+                step_value=1,
+                value_mapping=action_mapping,
             ),
         ]
 
@@ -724,7 +749,7 @@ class DucoRelay(DucoDevice):
                 module=self,
                 name="status",
                 input_reg=base_adr + 1,
-                value_mapping=status_descr,
+                value_mapping=status_mapping,
             ),
             GenericSensor(
                 mb_client,
@@ -732,29 +757,43 @@ class DucoRelay(DucoDevice):
                 name="ventilation level",
                 input_reg=base_adr + 2,
             ),
-            GenericSensor(
+            GenericActuator(
                 mb_client,
                 module=self,
                 name="ventilation setpoint",
                 holding_reg=base_adr + 0,
+                min_value=-1,
+                max_value=100,
+                step_value=5,
             ),
-            GenericSensor(
+            GenericActuator(
                 mb_client,
                 module=self,
                 name="switch mode",
                 holding_reg=base_adr + 1,
+                min_value=0,
+                max_value=2,
+                step_value=1,
+                value_mapping={0: "overrule", 1: "heatpump", 2: "presence"},
             ),
-            GenericSensor(
+            GenericActuator(
                 mb_client,
                 module=self,
                 name="switch value",
                 holding_reg=base_adr + 2,
+                min_value=0,
+                max_value=255,
+                step_value=5,
             ),
-            GenericSensor(
+            GenericActuator(
                 mb_client,
                 module=self,
                 name="action",
                 holding_reg=base_adr + 9,
+                min_value=1,
+                max_value=6,
+                step_value=1,
+                value_mapping=action_mapping,
             ),
         ]
 
