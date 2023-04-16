@@ -4,11 +4,14 @@ from minimalmodbus import MODE_RTU, ModbusException
 import logging
 import random
 
+from threading import Lock
+
 _LOGGER = logging.getLogger(__name__)
 
 ## file:///C:/Users/gebruiker/Downloads/informatieblad-ModBus-RTU-(nl).pdf
 # https://www.duco.eu/Wes/CDN/1/Attachments/informatieblad-ModBus-RTU-(nl)_638085224731148696.pdf
 
+modbus_lock = Lock()
 
 status_descr = {
     0: "Auto",
@@ -97,6 +100,7 @@ class GenericSensor:
     async def _read_input_reg(self, adress, number_of_decimals=0):
         while self.retry > 1:
             try:
+                modbus_lock.acquire()
                 ret = await self.mb_client.read_register(
                     adress - 1,
                     functioncode=4,
@@ -107,12 +111,15 @@ class GenericSensor:
                 return ret
             except ModbusException:
                 self.retry -= 1
+            finally:
+                modbus_lock.release()
 
         _LOGGER.warning("Disabled %s - unresponsive" % self.alias)
 
     async def _read_holding_reg(self, adress, number_of_decimals=0):
         while self.retry > 1:
             try:
+                modbus_lock.acquire()
                 ret = await self.mb_client.read_register(
                     adress - 1,
                     functioncode=3,
@@ -120,9 +127,12 @@ class GenericSensor:
                     number_of_decimals=number_of_decimals,
                 )
                 self.retry = self.retry_attempts
+
                 return ret
             except ModbusException:
                 self.retry -= 1
+            finally:
+                modbus_lock.release()
 
         print("Disabled sensor %s - unresponsive" % self.alias)
 
@@ -167,9 +177,13 @@ class GenericActuator(GenericSensor):
 
     async def write(self, value):
         if not SIMULATION_MODE:
-            await self._write_holding_reg(
-                self.holding_reg, value, number_of_decimals=self.number_of_decimals
-            )
+            try:
+                modbus_lock.acquire()
+                await self._write_holding_reg(
+                    self.holding_reg, value, number_of_decimals=self.number_of_decimals
+                )
+            finally:
+                modbus_lock.release()
         await self.update()
 
     async def _write_holding_reg(self, adress, value, number_of_decimals=0):
