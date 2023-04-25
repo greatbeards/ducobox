@@ -65,7 +65,7 @@ DOMAIN = "ducobox"
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[str] = ["sensor", "number"]  # "fan"
+PLATFORMS: list[str] = ["sensor", "number", "climate"]  # "fan"
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
