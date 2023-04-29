@@ -109,8 +109,8 @@ async def async_setup_entry(
 class MyClimateEntity(ClimateEntity):
     # Implement one of these methods.
 
-    _attr_hvac_modes = [HVACMode.FAN_ONLY, HVACMode.OFF, HVACMode.DRY]
-    _attr_hvac_mode = HVACMode.DRY
+    _attr_hvac_modes = [HVACMode.FAN_ONLY, HVACMode.OFF]
+    _attr_hvac_mode = HVACMode.FAN_ONLY
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_HUMIDITY | ClimateEntityFeature.FAN_MODE
     )  # | ClimateEntityFeature.SUPPORT_PRESET_MODE
@@ -121,8 +121,11 @@ class MyClimateEntity(ClimateEntity):
 
     def __init__(self, module, device_id):
         self.device_id = device_id
+        self._vent_actuator = module['ventilation setpoint']
+        self._action = module['action']
+        self._status = module['action']
+        self._temperature = module['temperature']
         self.module = module
-
 
     async def async_set_hvac_mode(self, hvac_mode):
         """Set new target hvac mode."""
@@ -137,20 +140,4 @@ class MyClimateEntity(ClimateEntity):
         pass
 
 
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return the device info."""
 
-        logging.info(type(self.module))
-
-        return DeviceInfo(
-            identifiers={
-                (
-                    DOMAIN,
-                    self.device_id,
-                )
-            },
-            name=self.module.name + str(" @ adress ") + str(self.device_id),
-            manufacturer="DucoBox Focus",
-            model=self.module.name,
-        )
