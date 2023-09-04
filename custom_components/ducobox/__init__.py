@@ -65,18 +65,10 @@ DOMAIN = "ducobox"
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[str] = ["sensor", "number"]  # "fan"
+PLATFORMS: list[str] = ["sensor", "number", "fan"] # "select", 
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    # async def async_setup_platform(
-    #    hass: HomeAssistant,
-    #    config: ConfigType,
-    #    async_add_entities: AddEntitiesCallback,
-    #    discovery_info: DiscoveryInfoType | None = None,
-    # ) -> None:
-    """Your controller/hub specific code."""
-    # Data that you want to share with your platforms
 
     dbb = DucoBoxBase(
         entry.data["serial_port"],
@@ -87,17 +79,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await dbb.create_serial_connection()
     await dbb.scan_modules()
 
-    coordinator = MyCoordinator(hass, dbb)
+    coordinator = DucoSensorCoordinator(hass, dbb)
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = dbb, coordinator
 
-    # hass.helpers.discovery.load_platform("sensor", DOMAIN, {}, entry)
     hass.config_entries.async_setup_platforms(entry, PLATFORMS)
 
     return True
 
 
-class MyCoordinator(DataUpdateCoordinator):
+class DucoSensorCoordinator(DataUpdateCoordinator):
     """My custom coordinator."""
 
     def __init__(self, hass, dbb):
@@ -105,10 +96,8 @@ class MyCoordinator(DataUpdateCoordinator):
         super().__init__(
             hass,
             _LOGGER,
-            # Name of the data. For logging purposes.
             name="DucoBox coordinator",
-            # Polling interval. Will only be polled if there are subscribers.
-            update_interval=timedelta(seconds=30),
+            update_interval=timedelta(seconds=10),
         )
         self.dbb = dbb
 

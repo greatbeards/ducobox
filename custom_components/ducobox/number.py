@@ -1,44 +1,20 @@
 from __future__ import annotations
 import logging
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor.const import SensorDeviceClass
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity import EntityCategory
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.update_coordinator import  CoordinatorEntity
 from homeassistant.components.number import (
     NumberDeviceClass,
     NumberEntity,
-    NumberEntityDescription,
-    NumberMode,
-)
-from homeassistant.components.switch import SwitchEntity
-from homeassistant.components.select import SelectEntity
-
-from homeassistant.components.sensor.const import SensorDeviceClass
-from homeassistant.const import (
-    TEMP_CELSIUS,
-    VOLUME_FLOW_RATE_CUBIC_METERS_PER_HOUR,
-    CONCENTRATION_PARTS_PER_MILLION,
-    PERCENTAGE,
-    TIME_MINUTES,
-    UnitOfTime,
-)
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
-from homeassistant.helpers.entity import DeviceInfo, Entity
-
-from homeassistant.helpers.entity import EntityCategory
-
-from homeassistant.config_entries import ConfigEntry
-
-
-from homeassistant.helpers.update_coordinator import (
-    CoordinatorEntity,
-    DataUpdateCoordinator,
-    UpdateFailed,
 )
 
 from . import DOMAIN
-from .ducobox import GenericSensor, DucoBox, GenericActuator
-from datetime import timedelta
+from .ducobox import GenericActuator
 from . import get_unit, MyCoordinator
 
 
@@ -51,21 +27,9 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Add cover for passed config_entry in HA."""
-    # The hub is loaded from the associated hass.data entry that was created in the
-    # __init__.async_setup_entry function
+    
     dbb, coordinator = hass.data[DOMAIN][config_entry.entry_id]
 
-    # Fetch initial data so we have data when entities subscribe
-    #
-    # If the refresh fails, async_config_entry_first_refresh will
-    # raise ConfigEntryNotReady and setup will try again later
-    #
-    # If you do not want to retry setup on failure, use
-    # coordinator.async_refresh() instead
-    #
-    # await coordinator.async_config_entry_first_refresh()
-
-    # master_module = dbb.modules[0]
     for module in dbb.modules:
         device_id = module.base_adr
         sensors = []
