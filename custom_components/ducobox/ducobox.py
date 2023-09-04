@@ -1,6 +1,6 @@
 import asyncio
 from asynciominimalmodbus import AsyncioInstrument
-from minimalmodbus import MODE_RTU, ModbusException
+from minimalmodbus import MODE_RTU, ModbusException, SlaveReportedException, Instrument 
 import logging
 import random
 
@@ -32,8 +32,8 @@ action_mapping = {
     0: "Node visualisation OFF",
     1: "Node visualisation ON",
     2: "Manual 1",
-    3: "Manual 1",
-    4: "Manual 1",
+    3: "Manual 2",
+    4: "Manual 3",
     5: "Automatic",
     6: "Away",
 }
@@ -68,7 +68,8 @@ class GenericSensor:
         self.input_reg = input_reg
         self.number_of_decimals = number_of_decimals
         self.value_mapping = value_mapping
-
+        
+        reg = input_reg if input_reg else holding_reg
         self.alias = (
             str(self.module.name)
             + " @adr "
@@ -76,9 +77,10 @@ class GenericSensor:
             + " "
             + self.name
             + " "
-            + str(input_reg)
-            + " "
-            + str(holding_reg)
+            + str(reg)
+            #+ str(input_reg)
+            #+ " "
+            #+ str(holding_reg)
         )
 
     async def update(self):
@@ -99,6 +101,9 @@ class GenericSensor:
 
         self.value = new_val
         if self.value_mapping:
+            if new_val is None:
+                return None
+            
             try:
                 self.value = self.value_mapping[new_val]
             except KeyError:
@@ -119,12 +124,15 @@ class GenericSensor:
                 )
                 self.retry = self.retry_attempts
                 return ret
+            except SlaveReportedException:
+                self.retry = 0
+                _LOGGER.warning("Disabled %s - not supported" % self.alias)
             except ModbusException:
                 self.retry -= 1
             finally:
                 modbus_lock.release()
 
-        _LOGGER.warning("Disabled %s - unresponsive" % self.alias)
+        #_LOGGER.warning("Disabled %s - unresponsive" % self.alias)
 
     async def _read_holding_reg(self, adress, number_of_decimals=0):
         while self.retry > 1:
@@ -139,12 +147,19 @@ class GenericSensor:
                 self.retry = self.retry_attempts
 
                 return ret
+            except SlaveReportedException:
+                self.retry = 0
+                _LOGGER.warning("Disabled sensor %s - not supported" % self.alias)
             except ModbusException:
                 self.retry -= 1
             finally:
                 modbus_lock.release()
 
-        print("Disabled sensor %s - unresponsive" % self.alias)
+        #print("Disabled sensor %s - unresponsive" % self.alias)
+
+    @property
+    def enabled(self):
+        return self.retry > 0
 
     def __str__(self):
         return "%s: %s" % (self.alias, str(self.value))
@@ -177,18 +192,19 @@ class GenericActuator(GenericSensor):
         self.min_value = min_value
         self.max_value = max_value
         self.step_value = step_value
-        self.inverse_value_mapping = None
+        self.reverse_mapping = None
         if value_mapping:
-            self.inverse_value_mapping = {v: k for k, v in value_mapping.items()}
+            self.reverse_mapping = {v: k for k, v in value_mapping.items()}
 
     async def write(self, value):
-        if self.inverse_value_mapping:
-            if not value in self.inverse_value_mapping:
+        if self.reverse_mapping:
+            if not value in self.reverse_mapping:
                 _LOGGER.error(
                     "%s not present in value mapping for %s" % (str(value), self.name)
                 )
                 return
-            value = self.inverse_value_mapping[value]
+            value = self.reverse_mapping[value]
+        _LOGGER.info("Writing %d to adress %d"%(value, self.holding_reg))
         if not SIMULATION_MODE:
             try:
                 modbus_lock.acquire()
@@ -209,11 +225,14 @@ class GenericActuator(GenericSensor):
                     signed=True,
                     number_of_decimals=number_of_decimals,
                 )
-                self.retry = self.retry_attempts
+                self.retry = self.retry_attempts 
                 return ret
+            except SlaveReportedException:
+                self.retry = 0
+                _LOGGER.warning("Disabled actuator %s - not supported" % self.alias)
             except ModbusException:
                 self.retry -= 1
-        _LOGGER.warning("Disabled actuator %s - unresponsive" % self.alias)
+        #_LOGGER.warning("Disabled actuator %s - unresponsive" % self.alias)
 
 
 class DucoBoxBase:
@@ -296,6 +315,8 @@ class DucoBoxBase:
                         adr - 1, functioncode=4, signed=True
                     )
                     break
+                except SlaveReportedException:
+                    self.retry = 0
                 except ModbusException:
                     self.retry -= 1
             if resp in ducobox_modules:
@@ -303,17 +324,29 @@ class DucoBoxBase:
                     "Detected %s on adress %d" % (ducobox_modules[resp][1], adr)
                 )
                 mod = ducobox_modules[resp][0](self.mb_client, adr)
+                
+                for sens in mod.sensors:
+                    await sens.update()
+                    if not sens.enabled:
+                        print("removing %s"%sens)
+                        mod.sensors.remove(sens)
+                        
                 self.modules.append(mod)
 
         if len(self.modules) == 0:
             raise DucoBoxException("No modules detected!")
-
+        
+        
     async def update_sensors(self):
         """Fetch all data from all sensors"""
 
         for id, module in enumerate(self.modules):
             for sensor in module.sensors:
                 await sensor.update()
+
+                if not sensor.enabled:
+                    print("removing %s"%sensor)
+                    module.sensors.remove(sensor)
 
 
 class DucoDevice:
@@ -322,16 +355,18 @@ class DucoDevice:
     def __init__(self, required_argument="sdf") -> None:
         print("__init__ DucoDevice: " + str(required_argument))
         self.sensors = []
+        self.sensors_by_name = {}
 
-    def register_sensors(self, sensor_list):
+    def register_sensors(self, sensor_list : [GenericSensor]):
         sens_names = [sens.name for sens in self.sensors]
 
         for new_sens in sensor_list:
             if not new_sens.name in sens_names:
                 self.sensors.append(new_sens)
+                self.sensors_by_name[new_sens.name] = new_sens
             else:
                 print("%s already present" % new_sens.name)
-
+            
 
 class DucoBox(DucoDevice):
     name = "Master module"
@@ -341,6 +376,16 @@ class DucoBox(DucoDevice):
         self.base_adr = base_adr
 
         sensors = [
+            GenericActuator(
+                mb_client,
+                module=self,
+                name="action",
+                holding_reg=base_adr + 9,
+                min_value=1,
+                max_value=6,
+                step_value=1,
+                value_mapping=action_mapping,
+            ),
             GenericActuator(
                 mb_client,
                 module=self,
@@ -367,16 +412,6 @@ class DucoBox(DucoDevice):
                 min_value=0,
                 max_value=100,
                 step_value=5,
-            ),
-            GenericActuator(
-                mb_client,
-                module=self,
-                name="action",
-                holding_reg=base_adr + 9,
-                min_value=1,
-                max_value=6,
-                step_value=1,
-                value_mapping=action_mapping,
             ),
             GenericSensor(
                 mb_client,
@@ -429,6 +464,16 @@ class DucoGenericSensor:
         self.base_adr = base_adr
 
         sensors = [
+            GenericActuator(
+                mb_client,
+                module=self,
+                name="action",
+                holding_reg=base_adr + 9,
+                min_value=1,
+                max_value=6,
+                step_value=1,
+                value_mapping=action_mapping,
+            ),
             GenericSensor(
                 mb_client,
                 module=self,
@@ -486,16 +531,7 @@ class DucoGenericSensor:
                 max_value=9999,
                 step_value=5,
             ),
-            GenericActuator(
-                mb_client,
-                module=self,
-                name="action",
-                holding_reg=base_adr + 9,
-                min_value=1,
-                max_value=6,
-                step_value=1,
-                value_mapping=action_mapping,
-            ),
+            
         ]
 
         if register_sensors:
@@ -524,6 +560,7 @@ class DucoCO2Sensor(DucoGenericSensor, DucoDevice):
                 mb_client,
                 module=self,
                 name="CO2 setpoint",
+                max_value=2000,
                 holding_reg=base_adr + 1,
             ),
         ]
@@ -583,6 +620,16 @@ class DucoValve:
             GenericActuator(
                 mb_client,
                 module=self,
+                name="action",
+                holding_reg=base_adr + 9,
+                min_value=1,
+                max_value=6,
+                step_value=1,
+                value_mapping=action_mapping,
+            ),
+            GenericActuator(
+                mb_client,
+                module=self,
                 name="auto min",
                 holding_reg=base_adr + 5,
                 min_value=10,
@@ -636,16 +683,7 @@ class DucoValve:
                 name="flow",
                 holding_reg=base_adr + 4,
             ),
-            GenericActuator(
-                mb_client,
-                module=self,
-                name="action",
-                holding_reg=base_adr + 9,
-                min_value=1,
-                max_value=6,
-                step_value=1,
-                value_mapping=action_mapping,
-            ),
+            
         ]
 
         print(register_sensors)
@@ -744,6 +782,16 @@ class DucoRelay(DucoDevice):
         DucoDevice.__init__(self)
 
         sensors = [
+            GenericActuator(
+                mb_client,
+                module=self,
+                name="action",
+                holding_reg=base_adr + 9,
+                min_value=1,
+                max_value=6,
+                step_value=1,
+                value_mapping=action_mapping,
+            ),
             GenericSensor(
                 mb_client,
                 module=self,
@@ -785,16 +833,6 @@ class DucoRelay(DucoDevice):
                 max_value=255,
                 step_value=5,
             ),
-            GenericActuator(
-                mb_client,
-                module=self,
-                name="action",
-                holding_reg=base_adr + 9,
-                min_value=1,
-                max_value=6,
-                step_value=1,
-                value_mapping=action_mapping,
-            ),
         ]
 
         self.register_sensors(sensors)
@@ -821,12 +859,12 @@ if __name__ == "__main__":
 
     loop = asyncio.get_event_loop()
 
-    dbb = DucoBoxBase("/dev/ttyUSB0", simulate=True)
+    dbb = DucoBoxBase("/dev/ttyACM2", simulate=False)
     loop.run_until_complete(dbb.create_serial_connection())
     loop.run_until_complete(dbb.scan_modules())
     loop.run_until_complete(dbb.update_sensors())
 
-    while True:
+    while False:
         time.sleep(1)
         loop.run_until_complete(dbb.update_sensors())
         print(
