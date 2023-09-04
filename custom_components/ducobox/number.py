@@ -15,7 +15,7 @@ from homeassistant.components.number import (
 
 from . import DOMAIN
 from .ducobox import GenericActuator
-from . import get_unit, MyCoordinator
+from . import get_unit, DucoSensorCoordinator
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ class DucoNumberController(CoordinatorEntity, NumberEntity):
 
     def __init__(
         self,
-        coordinator: MyCoordinator,
+        coordinator: DucoSensorCoordinator,
         sens: GenericActuator,
         device_id,
     ) -> None:
