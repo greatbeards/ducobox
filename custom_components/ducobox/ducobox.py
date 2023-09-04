@@ -100,6 +100,7 @@ class GenericSensor:
                 )
 
         self.value = new_val
+
         if self.value_mapping:
             if new_val is None:
                 return None
@@ -113,7 +114,7 @@ class GenericSensor:
                 self.value = None
 
     async def _read_input_reg(self, adress, number_of_decimals=0):
-        while self.retry > 1:
+        while self.retry >= 1:
             try:
                 modbus_lock.acquire()
                 ret = await self.mb_client.read_register(
@@ -132,10 +133,14 @@ class GenericSensor:
             finally:
                 modbus_lock.release()
 
-        #_LOGGER.warning("Disabled %s - unresponsive" % self.alias)
+
+        if self.retry == 0:
+            self.retry = -1
+            _LOGGER.warning("Disabled %s - unresponsive" % self.alias)
+
 
     async def _read_holding_reg(self, adress, number_of_decimals=0):
-        while self.retry > 1:
+        while self.retry >= 1:
             try:
                 modbus_lock.acquire()
                 ret = await self.mb_client.read_register(
@@ -155,7 +160,6 @@ class GenericSensor:
             finally:
                 modbus_lock.release()
 
-        #print("Disabled sensor %s - unresponsive" % self.alias)
 
     @property
     def enabled(self):
@@ -216,7 +220,7 @@ class GenericActuator(GenericSensor):
         await self.update()
 
     async def _write_holding_reg(self, adress, value, number_of_decimals=0):
-        while self.retry > 1:
+        while self.retry >= 1:
             try:
                 ret = await self.mb_client.write_register(
                     adress - 1,
@@ -232,9 +236,7 @@ class GenericActuator(GenericSensor):
                 _LOGGER.warning("Disabled actuator %s - not supported" % self.alias)
             except ModbusException:
                 self.retry -= 1
-        #_LOGGER.warning("Disabled actuator %s - unresponsive" % self.alias)
-
-
+       
 class DucoBoxBase:
     """
     DucoBoxBase initializes all connected valves/devices
