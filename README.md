@@ -8,9 +8,6 @@ All modules described in the ducobox focus manual are supported.
 `https://www.duco.eu/Wes/CDN/1/Attachments/informatieblad-ModBus-RTU-(nl)_638085224731148696.pdf`
 
 
-Under development!
-
-
 Connection
 ----------
 
@@ -34,7 +31,6 @@ installation
 3. Enter the repository url: `https://github.com/greatbeards/ducobox`, category: `integration`
 4. Reboot
 
-
 Add `Ducobox Focus` using `add integration`.
 
 Fill in the serial port. This was `/dev/ttyUSB0` in my case, this will depent on you setup.
@@ -47,7 +43,10 @@ Simulation mode will create a virtual device for every supported type of valve/s
 Status
 ======
 
-
+2023-09
+* Improved error handling
+* Settings can be written
+* Added FanEntity
 
 2023-03:
 * Under development!
