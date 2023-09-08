@@ -4,7 +4,7 @@ from minimalmodbus import MODE_RTU, ModbusException, SlaveReportedException, Ins
 import logging
 import random
 
-from threading import Lock
+from asyncio import Lock
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,10 +40,8 @@ action_mapping = {
 
 SIMULATION_MODE = False
 
-
 class DucoBoxException(Exception):
     pass
-
 
 class GenericSensor:
     """Generic class to read a setting from the instrument."""
@@ -116,7 +114,7 @@ class GenericSensor:
     async def _read_input_reg(self, adress, number_of_decimals=0):
         while self.retry >= 1:
             try:
-                modbus_lock.acquire()
+                await modbus_lock.acquire()
                 ret = await self.mb_client.read_register(
                     adress - 1,
                     functioncode=4,
@@ -142,7 +140,7 @@ class GenericSensor:
     async def _read_holding_reg(self, adress, number_of_decimals=0):
         while self.retry >= 1:
             try:
-                modbus_lock.acquire()
+                await modbus_lock.acquire()
                 ret = await self.mb_client.read_register(
                     adress - 1,
                     functioncode=3,
@@ -211,7 +209,7 @@ class GenericActuator(GenericSensor):
         _LOGGER.info("Writing %d to adress %d"%(value, self.holding_reg))
         if not SIMULATION_MODE:
             try:
-                modbus_lock.acquire()
+                await modbus_lock.acquire()
                 await self._write_holding_reg(
                     self.holding_reg, value, number_of_decimals=self.number_of_decimals
                 )
@@ -273,7 +271,7 @@ class DucoBoxBase:
             mb_client.serial.baudrate = self.baudrate
             self.mb_client = mb_client
         except Exception:
-            _LOGGER.exception(f"Failed to open serial port {self.serial_port}")
+            _LOGGER.error(f"Failed to open serial port {self.serial_port}")
 
     def add_sensor(self, sensor: GenericSensor):
         self.sensors.append(sensor)
@@ -306,6 +304,10 @@ class DucoBoxBase:
         """Scan all connected modules"""
         if self.simulate:
             await self._simulate_modules()
+            return
+    
+        if self.mb_client is None:
+            _LOGGER.warning("Serial port not connected!")
             return
 
         self.modules = []
