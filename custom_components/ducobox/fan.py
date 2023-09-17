@@ -73,11 +73,12 @@ class DucoFanEntity(FanEntity):
         self.device_id = device_id
         self._status = module.sensors_by_name['action']
         self._setpoint = module.sensors_by_name['ventilation setpoint']
+        self._level = module.sensors_by_name["ventilation level"]
         
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set the preset mode of the fan."""
         if preset_mode == "Auto":
-            await self._status.write("Auto")
+            await self._status.write("Automatic")
             await self._setpoint.write(-1)
     
     async def async_set_percentage(self, percentage: int) -> None:
@@ -90,8 +91,12 @@ class DucoFanEntity(FanEntity):
         
     @property
     def is_on(self):
-        return self._setpoint.value != 0
+        return self._level.value > 0
         
+    @property
+    def percentage(self):
+        return self._level.value
+
     @property
     def name(self) -> str:
         """Return the name of the sensor."""
