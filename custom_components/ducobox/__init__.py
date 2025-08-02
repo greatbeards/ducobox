@@ -1,9 +1,5 @@
-# https://developers.home-assistant.io/docs/integration_fetching_data
-# https://github.com/home-assistant/example-custom-config/tree/master/custom_components/example_sensor/
+"""DucoBox integration for Home Assistant."""
 
-# https://github.com/home-assistant/example-custom-config/blob/master/custom_components/example_load_platform/sensor.py
-
-"""Example Load Platform integration."""
 from __future__ import annotations
 
 from homeassistant.core import HomeAssistant
@@ -31,27 +27,19 @@ from homeassistant.components.select import SelectEntity
 
 from homeassistant.components.sensor.const import SensorDeviceClass
 from homeassistant.const import (
-    TEMP_CELSIUS,
-    VOLUME_FLOW_RATE_CUBIC_METERS_PER_HOUR,
     CONCENTRATION_PARTS_PER_MILLION,
     PERCENTAGE,
-    TIME_MINUTES,
     UnitOfTime,
 )
+
+from homeassistant.const import UnitOfVolumeFlowRate, UnitOfTemperature
+
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
-from homeassistant.helpers.entity import DeviceInfo, Entity
-
-from homeassistant.helpers.entity import EntityCategory
-
 from homeassistant.config_entries import ConfigEntry
 
 
 from homeassistant.helpers.update_coordinator import (
-    CoordinatorEntity,
     DataUpdateCoordinator,
-    UpdateFailed,
 )
 
 
@@ -65,11 +53,10 @@ DOMAIN = "ducobox"
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[str] = ["sensor", "number", "fan"] # "select", 
+PLATFORMS: list[str] = ["sensor", "number", "fan"]  # "select",
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-
     dbb = DucoBoxBase(
         entry.data["serial_port"],
         baudrate=entry.data["baudrate"],
@@ -84,14 +71,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = dbb, coordinator
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    
+
     return True
 
 
 class DucoSensorCoordinator(DataUpdateCoordinator):
     """My custom coordinator."""
 
-    def __init__(self, hass, dbb):
+    def __init__(self, hass, dbb) -> None:
         """Initialize my coordinator."""
         super().__init__(
             hass,
@@ -107,14 +94,14 @@ class DucoSensorCoordinator(DataUpdateCoordinator):
         This is the place to pre-process the data to lookup tables
         so entities can quickly look up their data.
         """
-        await self.dbb.update_sensors()
+        return await self.dbb.update_sensors()
 
 
 def get_unit(name):
-    """Get the sensor unit based upon its name"""
+    """Get the sensor unit based upon its name."""
     unit = None
     if name in "temperature":
-        unit = TEMP_CELSIUS
+        unit = UnitOfTemperature.CELSIUS
     elif name in [
         "ventilation level",
         "auto min",
@@ -124,12 +111,12 @@ def get_unit(name):
     elif "CO2" in name:
         unit = CONCENTRATION_PARTS_PER_MILLION
     elif name in ["flow", "inlet"]:
-        unit = VOLUME_FLOW_RATE_CUBIC_METERS_PER_HOUR
-    elif "humidity" in name and not "delta" in name:
+        unit = UnitOfVolumeFlowRate.CUBIC_METERS_PER_HOUR
+    elif "humidity" in name and "delta" not in name:
         unit = PERCENTAGE
     elif "button" in name:
         unit = PERCENTAGE
     elif "Time" in name:
-        unit = TIME_MINUTES
+        unit = UnitOfTime.MINUTES
 
     return unit
